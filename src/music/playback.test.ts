@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyPlan, mergePlans, notesToPlan } from './playback'
+import { mergePlans, notesToPlan } from './playback'
 
 describe('notesToPlan', () => {
   it('把音符转成事件，频率由 MIDI 换算', () => {
@@ -78,9 +78,33 @@ describe('mergePlans', () => {
   })
 
   it('不修改输入计划', () => {
-    const a = notesToPlan([{ midi: 60, atSec: 0, durSec: 1 }], 'piano')
-    const before = a.events.length
-    mergePlans(a, emptyPlan())
-    expect(a.events).toHaveLength(before)
+    // 用两个都非空的计划，atSec 无序，确保排序会改变某个计划的顺序
+    const a = notesToPlan(
+      [
+        { midi: 60, atSec: 2, durSec: 1 },
+        { midi: 62, atSec: 1, durSec: 1 },
+      ],
+      'piano',
+    )
+    const b = notesToPlan([{ midi: 64, atSec: 0, durSec: 1 }], 'strings')
+
+    // 记录 a 的原始状态
+    const aEventsRef = a.events
+    const aFreqsBefore = a.events.map((e) => e.freqHz)
+    const aSecBefore = a.events.map((e) => e.atSec)
+
+    // 合并
+    const merged = mergePlans(a, b)
+
+    // 验证 a 的内容和顺序未改变
+    expect(a.events).toBe(aEventsRef) // 数组引用未变
+    expect(a.events.map((e) => e.freqHz)).toEqual(aFreqsBefore) // 内容未变
+    expect(a.events.map((e) => e.atSec)).toEqual(aSecBefore) // 顺序未变（仍为 [2, 1]）
+
+    // 验证 merged 是新数组
+    expect(merged.events).not.toBe(a.events)
+
+    // 验证 merged 已排序
+    expect(merged.events.map((e) => e.atSec)).toEqual([0, 1, 2])
   })
 })
