@@ -625,3 +625,52 @@ GateRecord    { phaseId, attempts, passedAt }
 **决定**：底层枚举保持 12 音类 12 名不变（作为掌握度模型的稳定 key），**语境相关拼写归为显示层问题**，在 UI 实现时由 `DisplayScheme` 依据当前调式与旋律方向决定显示字符串。底层 `ScaleDegree` 值不受影响。
 
 此项在 T6（和声/旋律小调）进入课程前必须解决，否则该阶段的显示是错的。
+
+---
+
+## 16. P-1 实施后的修订与前向约束
+
+P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。以下是实施过程中确认的对本 spec 的修订，以及必须带入后续阶段的约束。
+
+### 16.1 对 §4.2 的修订：`Chord` 结构
+
+§4.2 声明的是 `Chord { degree: RomanNumeral, quality, inversion, extensions }`。**实际实现为 `Chord { rootDegree: ScaleDegree, quality, inversion }`，此偏离经验算确认为正确，予以保留。**
+
+理由（对照 §8.1 课程表 H1–H8 验算）：
+
+- **`extensions` 缺失无害**：H4 最高只到七和弦（`V7`、`Imaj7`、`ii7`、`vi7`），全部被 `ChordQuality` 的四个七和弦品质覆盖。整条 P1–P5 课程不含九/十一/十三和弦。
+- **`ScaleDegree` 根音比 `RomanNumeral` 更强**：H8 要求借用和弦与副属。`V/V` = `{ rootDegree: 're', quality: 'maj' }`，借用 `♭VI` = `{ rootDegree: 'le', quality: 'maj' }`——12 个半音音级全部可表达。`RomanNumeral` 若限定为自然音级会卡住 H8。
+
+若 P-5 之后引入爵士和声需要 `extensions`，届时扩展类型即可。
+
+### 16.2 前向约束
+
+以下六条是 P-1 实施中发现、必须在后续阶段处理的问题。每条都已验证过触发条件，不是猜测。
+
+**FWD-1 · `AudioEngine.active` 无界增长（影响 P-3）**
+`play()` 只往 `active` 数组 push，从不修剪；`onended` 断开了节点却不移除引用；只有 `stopAll()` 清空。P-1 内被验证页每次先调 `stopAll()` 所掩盖。P-3 会话运行时若连续播放（播题 → 等答 → 播反馈 → 下一题）而不每次 `stopAll()`，节点引用会随会话线性累积——单题约 10–20 事件 × 每事件 4–6 个节点，一次 30 分钟会话可积累上万个已断开但无法回收的 `AudioNode` 引用。
+**修法**：`onended` 里 splice，或 `play()` 开头按 `endSec` 清理过期项。
+
+**FWD-2 · `accent` 与「力度」变异轴争夺同一个 `gain` 字段（影响 P-2）**
+`rhythm.ts` 的 `TimedOnset` 有 `accent: boolean`，而 `playback.ts` 的 `NoteSpec`/`PlaybackEvent` 只有一个 `gain: number`。§6.2 的变异轴 5「力度」也要写 `gain`。且 `TimedOnset → NoteSpec` 的桥接函数目前根本不存在。
+**修法**：P-2 落地 R 轨前先定清楚合成规则（`gain = baseVelocity × accentFactor` 或其他）。现在定比事后拆便宜。
+
+**FWD-3 · `chordToMidi` 无独立低音声部（影响 P-2/P-3 的 H6）**
+现实现是密集排列的向上旋转：`inversion=2` 的 C 和弦是 `[67,72,76]`，低音从 C4 升到了 G4。这对 H6「转位与低音线听辨——扒和弦的实战关键」不够用，低音线训练需要低音待在低音区、上方声部另行排列。
+**修法**：新增 voicing 函数，**不要改 `chordToMidi`**——它当前的行为对 H1–H5 是正确的。
+
+**FWD-4 · 音区变异轴需要整体钳制，不只是 drone（影响 P-2）**
+§6.2 的 `variationLevel 3` 开放音区（±2 个八度）后：`centerMidi` 可低至 36，使调性语境的持续低音掉到 MIDI 18（约 23 Hz）——低于人耳下限，手机扬声器根本发不出。同一个轴也抬高目标音与和弦：四音和弦 `inversion=3` 在根音之上再堆最多 +36 半音，配合 `centerMidi=84` 顶音可到 MIDI 100 上下。
+**修法**：钳制做在 `centerMidi` 入口或整个 `PlaybackPlan` 上，而不是只给 drone 打补丁。
+
+**FWD-5 · `GAP_SEC` 与 `releaseSec` 跨层不协调（影响 P-3）**
+`tonalContext.ts` 的 `GAP_SEC = 0.35` 在 music 层选定，而释音尾巴 `releaseSec` 定义在 audio 层——按 §3.2 的分层契约，music 层不可能知道它。实测后果：`strings` 音色（`releaseSec = 0.45`）下，L0 终止式末尾主和弦的 `stopSec` = 2.10，而目标音在 `leadInSec` = 2.0 起音，**尾音溢入目标音 0.10 秒**。其余三种音色不溢出。
+**修法**：不要回头调 `GAP_SEC`——那会让 music 层隐性耦合 audio 常量，破坏 §3.2 的边界。P-3 若发现语境撤除不干净，正解是在 audio 层做「目标音起音前淡出残留声部」。
+
+**FWD-6 · `beatUnit` 的记谱约定靠测试而非类型钉住（影响 P-2 的 R6）**
+`bpm` 的语义是「每分钟多少个 `beatUnit` 拍」，算式自洽全靠一条约定：`beatsPerBar` 必须填**记谱拍数**而非**感知拍数**。6/8 拍应填 `{ beatsPerBar: 6, beatUnit: 8 }`（六个八分音符），而非 `{ beatsPerBar: 3, beatUnit: 8 }`（指挥数的三个附点四分音符）。填错会让时值计算静默出错。
+**现状**：P-1 已补一条 6/8 钉桩测试锁住该约定。P-2 实现 R6 时若要扩展复合拍，先读那条测试。
+
+### 16.3 尚未闭合的验收依赖
+
+P-1 计划的手机人耳实听（10 项）**尚未执行**，需要人类戴耳机在移动设备上完成。其中第 7 项「四种音色听感确实不同」是一条可能回流到 P-1 的验收依赖：`voice` 与 `strings` 都是正弦波、包络形状相近（慢起音 + 高延音），仅靠起音时间（70ms vs 160ms）与延音电平（0.6 vs 0.75）区分，是四者中最弱的一对。**若人耳分不出，需给二者不同的 `oscType`**——否则 §6.2 的音色变异轴有效基数会从 4 退化为 3，抗特异性训练相应打折。
