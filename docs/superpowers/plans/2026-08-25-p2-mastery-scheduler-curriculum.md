@@ -528,7 +528,7 @@ spec §8.1 的分级（T1–T8 / H1–H8 / R1–R8）与 §8.2 的阶段（P1–
   - `type StageId = string`
   - `type PhaseId = 'P1' | 'P2' | 'P3' | 'P4' | 'P5'`
   - `interface Stage { id: StageId; track: Track; label: string; introduces: KnowledgePointId[]; requiresContextLevel: ContextLevel; requiresVariationLevel: VariationLevel; prerequisiteStages: StageId[] }`
-  - `interface GateSpec { stabilityThreshold: number; windowAccuracy: number; requiresBoss: boolean }`
+  - `interface GateSpec { stabilityThreshold: number; meanStepThreshold: number; requiresBoss: boolean }`
   - `interface Phase { id: PhaseId; label: string; stages: StageId[]; gate: GateSpec }`
   - `const ALL_STAGES: readonly Stage[]`
   - `const ALL_PHASES: readonly Phase[]`
