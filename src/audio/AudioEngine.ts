@@ -1,0 +1,115 @@
+import type { PlaybackPlan } from '../music/playback'
+import { planEndSec, planToVoices, type Voice } from './voices'
+
+/** 总输出衰减，避免多声部叠加削波 */
+const MASTER_GAIN = 0.6
+const DEFAULT_DELAY_SEC = 0.12
+
+/**
+ * 唯一接触 Web Audio API 的地方。它不懂乐理，只执行 PlaybackPlan。
+ * 所有时刻均基于 ctx.currentTime——绝不使用 Date.now()（spec §11）。
+ */
+export class AudioEngine {
+  private active: { disconnect(): void }[] = []
+
+  constructor(private readonly ctx: AudioContext) {}
+
+  get currentTime(): number {
+    return this.ctx.currentTime
+  }
+
+  async resume(): Promise<void> {
+    if (this.ctx.state !== 'running') {
+      await this.ctx.resume()
+    }
+  }
+
+  play(
+    plan: PlaybackPlan,
+    delaySec: number = DEFAULT_DELAY_SEC,
+  ): { startSec: number; endSec: number } {
+    const startSec = this.ctx.currentTime + delaySec
+    for (const voice of planToVoices(plan, startSec)) {
+      this.spawn(voice)
+    }
+    return { startSec, endSec: planEndSec(plan, startSec) }
+  }
+
+  stopAll(): void {
+    for (const node of this.active) {
+      try {
+        node.disconnect()
+      } catch {
+        // 节点可能已自行结束并断开，忽略
+      }
+    }
+    this.active = []
+  }
+
+  dispose(): void {
+    this.stopAll()
+    void this.ctx.close()
+  }
+
+  private spawn(voice: Voice): void {
+    const { env } = voice.timbre
+    const amp = this.ctx.createGain()
+    amp.connect(this.ctx.destination)
+    this.active.push(amp)
+
+    const peak = voice.gain * MASTER_GAIN
+    const sustainLevel = peak * env.sustain
+    // 包络断点钳制为单调不减且不超过 stopSec——短音符 + 长衰减音色（如 piano）下，
+    // 未钳制的 decayEnd 可能晚于 stopSec，导致后续自动化事件时刻倒挂（行为未定义，实测为不淡出）。
+    const attackEnd = Math.min(voice.startSec + env.attackSec, voice.stopSec)
+    const decayEnd = Math.min(attackEnd + env.decaySec, voice.stopSec)
+    const releaseStart = Math.min(
+      Math.max(decayEnd, voice.stopSec - env.releaseSec),
+      voice.stopSec,
+    )
+
+    amp.gain.setValueAtTime(0, voice.startSec)
+    amp.gain.linearRampToValueAtTime(peak, attackEnd)
+    amp.gain.linearRampToValueAtTime(sustainLevel, decayEnd)
+    amp.gain.setValueAtTime(sustainLevel, releaseStart)
+    amp.gain.linearRampToValueAtTime(0, voice.stopSec)
+
+    for (const partial of voice.timbre.partials) {
+      const osc = this.ctx.createOscillator()
+      osc.type = voice.timbre.oscType
+      osc.frequency.setValueAtTime(voice.freqHz * partial.ratio, voice.startSec)
+
+      const partialGain = this.ctx.createGain()
+      partialGain.gain.setValueAtTime(partial.gain, voice.startSec)
+
+      osc.connect(partialGain)
+      partialGain.connect(amp)
+      osc.start(voice.startSec)
+      osc.stop(voice.stopSec)
+
+      this.active.push(osc, partialGain)
+      osc.onended = () => {
+        try {
+          osc.disconnect()
+          partialGain.disconnect()
+        } catch {
+          // 已断开，忽略
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 创建引擎。必须在用户手势的调用栈内调用——iOS Safari 要求
+ * AudioContext 由用户手势启动（spec §11）。
+ */
+export function createAudioEngine(): AudioEngine {
+  const Ctor: typeof AudioContext =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+  if (!Ctor) {
+    throw new Error('此浏览器不支持 Web Audio，无法播放。')
+  }
+  return new AudioEngine(new Ctor())
+}
