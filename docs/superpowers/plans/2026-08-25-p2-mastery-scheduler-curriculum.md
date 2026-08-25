@@ -2720,7 +2720,7 @@ spec §8.3：**三模态齐平**——该阶段全部知识点在听辨、唱、
 - Test: `src/scheduling/gate.test.ts`
 
 **Interfaces:**
-- Consumes: `curriculum/curriculum.ts` 的 `Curriculum`, `knowledgePointsOfPhase`, `phaseIndex`, `phaseAt`；`curriculum/knowledgePoints.ts` 的 `MODALITIES`, `masteryKey`；`curriculum/stages.ts` 的 `PhaseId`；`mastery.ts` 的 `MasteryStore`, `getMastery`；`gating.ts` 的 `windowAccuracy`
+- Consumes: `curriculum/curriculum.ts` 的 `Curriculum`, `knowledgePointsOfPhase`, `phaseIndex`, `phaseAt`；`curriculum/knowledgePoints.ts` 的 `MODALITIES`, `masteryKey`；`curriculum/stages.ts` 的 `PhaseId`；`mastery.ts` 的 `MasteryStore`, `getMastery`；`gating.ts` 的 `meanLadderStep`
 - Produces:
   - `interface GateEvaluation { passed: boolean; blockingKeys: MasteryKey[]; bossSatisfied: boolean }`
   - `evaluateGate(c: Curriculum, store: MasteryStore, phaseId: PhaseId, bossPassed: boolean): GateEvaluation`
