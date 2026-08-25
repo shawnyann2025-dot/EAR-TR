@@ -71,6 +71,27 @@ describe('isWellFormedSpec', () => {
     // degree:* 属 T 轨，标成 H 轨是错的
     expect(isWellFormedSpec({ ...OK, track: 'H' })).toBe(false)
   })
+
+  it('非法 segment 不通过', () => {
+    expect(isWellFormedSpec({ ...OK, segment: 'invalid' as ExerciseSpec['segment'] })).toBe(false)
+  })
+
+  it('非法 modality 不通过', () => {
+    expect(isWellFormedSpec({ ...OK, modality: 'invalid' as ExerciseSpec['modality'] })).toBe(false)
+  })
+
+  it('kpId 无法解析时返回 false 而非抛出异常', () => {
+    expect(() => isWellFormedSpec({ ...OK, kpId: 'nocolon' })).not.toThrow()
+    expect(isWellFormedSpec({ ...OK, kpId: 'nocolon' })).toBe(false)
+  })
+
+  it('difficultyStep 为小数不通过', () => {
+    expect(isWellFormedSpec({ ...OK, difficultyStep: 0.5 })).toBe(false)
+  })
+
+  it('variationLevel 下界（负数）不通过', () => {
+    expect(isWellFormedSpec({ ...OK, variationLevel: -1 as ExerciseSpec['variationLevel'] })).toBe(false)
+  })
 })
 
 describe('describeSpec', () => {
