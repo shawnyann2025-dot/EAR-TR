@@ -82,10 +82,11 @@ const HARMONY: KnowledgePoint[] = [
   kp('chord', 'bassline', '低音线走向', [C('inv-first')]),
   // H7 小调进行
   kp('chord', 'i', 'i 级（小调主）', [C('quality-min')]),
-  kp('chord', 'iv', 'iv 级（小调下属）', [C('i')]),
-  kp('chord', 'VI', 'VI 级（小调）', [C('i')]),
-  kp('chord', 'VII', 'VII 级（小调）', [C('i')]),
-  kp('prog', 'i-VI-III-VII', '小调进行 i–VI–III–VII', [C('i'), C('VI'), C('VII')]),
+  kp('chord', 'iv', 'iv 级（小调下属）', [C('quality-min'), C('i')]),
+  kp('chord', 'VI', 'VI 级（小调）', [C('quality-maj'), C('i')]),
+  kp('chord', 'III', 'III 级（小调）', [C('quality-maj'), C('i')]),
+  kp('chord', 'VII', 'VII 级（小调）', [C('quality-maj'), C('i')]),
+  kp('prog', 'i-VI-III-VII', '小调进行 i–VI–III–VII', [C('i'), C('III'), C('VI'), C('VII')]),
   // H8 借用与副属
   kp('chord', 'V-of-V', '副属 V/V', [C('V'), C('ii')]),
   kp('chord', 'borrowed-bVI', '借用 ♭VI', [C('VI'), C('I')]),

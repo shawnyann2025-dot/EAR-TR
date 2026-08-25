@@ -60,4 +60,85 @@ describe('ALL_KNOWLEDGE_POINTS', () => {
     expect(ids.has('prog:vi-IV-I-V')).toBe(true)
     expect(ids.has('prog:I-vi-IV-V')).toBe(true)
   })
+
+  it('各轨道的知识点条数固定，漏一条即失败', () => {
+    expect(knowledgePointsOfTrack('T')).toHaveLength(20)
+    expect(knowledgePointsOfTrack('H')).toHaveLength(26)
+    expect(knowledgePointsOfTrack('R')).toHaveLength(15)
+    expect(ALL_KNOWLEDGE_POINTS).toHaveLength(61)
+  })
+
+  it('R 轨全部 15 条节奏知识点都存在', () => {
+    const ids = new Set(ALL_KNOWLEDGE_POINTS.map((kp) => kp.id))
+    const rhythmIds = [
+      'rhythm:beat-one',
+      'rhythm:meter-2-4',
+      'rhythm:meter-3-4',
+      'rhythm:quarter',
+      'rhythm:eighth-pair',
+      'rhythm:dotted',
+      'rhythm:rest',
+      'rhythm:sixteenth',
+      'rhythm:synco-8',
+      'rhythm:triplet',
+      'rhythm:meter-6-8',
+      'rhythm:anacrusis',
+      'rhythm:tie-across-bar',
+      'rhythm:mixed-meter',
+      'rhythm:synco-16',
+    ]
+    for (const id of rhythmIds) {
+      expect(ids.has(id)).toBe(true)
+    }
+  })
+
+  it('T 轨变化音与转调全部存在', () => {
+    const ids = new Set(ALL_KNOWLEDGE_POINTS.map((kp) => kp.id))
+    const toneIds = [
+      'degree:major:fi',
+      'degree:major:te',
+      'degree:major:me',
+      'degree:minor:si',
+      'degree:minor:fi',
+      'degree:modulation:shift',
+    ]
+    for (const id of toneIds) {
+      expect(ids.has(id)).toBe(true)
+    }
+  })
+
+  it('H 轨所有和弦与进行都存在', () => {
+    const ids = new Set(ALL_KNOWLEDGE_POINTS.map((kp) => kp.id))
+    const harmonyIds = [
+      'chord:quality-maj',
+      'chord:quality-min',
+      'chord:I',
+      'chord:IV',
+      'chord:V',
+      'chord:vi',
+      'chord:ii',
+      'chord:V7',
+      'chord:Imaj7',
+      'chord:ii7',
+      'chord:vi7',
+      'prog:I-V-vi-IV',
+      'prog:vi-IV-I-V',
+      'prog:I-vi-IV-V',
+      'chord:inv-first',
+      'chord:inv-second',
+      'chord:bassline',
+      'chord:i',
+      'chord:iv',
+      'chord:VI',
+      'chord:III',
+      'chord:VII',
+      'prog:i-VI-III-VII',
+      'chord:V-of-V',
+      'chord:borrowed-bVI',
+      'chord:borrowed-bVII',
+    ]
+    for (const id of harmonyIds) {
+      expect(ids.has(id)).toBe(true)
+    }
+  })
 })
