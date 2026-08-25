@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AudioEngine } from './AudioEngine'
-import { notesToPlan } from '../music/playback'
+import { emptyPlan, notesToPlan } from '../music/playback'
 
 /** 记录所有创建过的节点与调用，供断言用 */
 function makeFakeContext() {
@@ -132,7 +132,7 @@ describe('AudioEngine', () => {
   })
 
   it('播放空计划不创建任何节点也不抛错', () => {
-    expect(() => engine.play({ events: [], totalDurSec: 0 })).not.toThrow()
+    expect(() => engine.play(emptyPlan())).not.toThrow()
     expect(fake.created.oscillators).toHaveLength(0)
   })
 

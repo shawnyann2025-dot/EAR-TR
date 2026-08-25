@@ -81,3 +81,34 @@ describe('rhythmDurationSec', () => {
     expect(rhythmDurationSec(sparse, 120)).toBeCloseTo(4, 10)
   })
 })
+
+// 6/8 是复合拍：beatsPerBar 必须填「记谱拍数」（六个八分音符 = 6），
+// 而不是「感知拍数」（指挥数的三个附点四分音符 = 3）。填错会让时值计算静默出错。
+const SIX_EIGHT = { beatsPerBar: 6, beatUnit: 8 } as const
+
+const COMPOUND_EIGHTHS: RhythmPattern = {
+  meter: SIX_EIGHT,
+  bars: 1,
+  events: [
+    { onsetBeats: 0, durBeats: 1, accent: true },
+    { onsetBeats: 1, durBeats: 1, accent: false },
+    { onsetBeats: 2, durBeats: 1, accent: false },
+    { onsetBeats: 3, durBeats: 1, accent: true },
+    { onsetBeats: 4, durBeats: 1, accent: false },
+    { onsetBeats: 5, durBeats: 1, accent: false },
+  ],
+}
+
+describe('6/8 复合拍：beatsPerBar 是记谱拍数（八分音符个数），不是感知拍数', () => {
+  it('rhythmDurationSec：120 BPM 下一小节 = 6 个八分音符 × 0.5 秒 = 3 秒', () => {
+    // 期望值按 beatsToSeconds(bars × beatsPerBar, bpm) 手算：
+    // beatsToSeconds(1 × 6, 120) = 6 × 60 / 120 = 3
+    expect(rhythmDurationSec(COMPOUND_EIGHTHS, 120)).toBeCloseTo(3, 10)
+  })
+
+  it('expandRhythm：六个八分音符落在 0/0.5/1.0/1.5/2.0/2.5 秒，各时值 0.5 秒', () => {
+    const onsets = expandRhythm(COMPOUND_EIGHTHS, 120, 0)
+    expect(onsets.map((o) => o.atSec)).toEqual([0, 0.5, 1, 1.5, 2, 2.5])
+    expect(onsets.every((o) => o.durSec === 0.5)).toBe(true)
+  })
+})

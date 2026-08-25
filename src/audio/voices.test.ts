@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { planEndSec, planToVoices } from './voices'
-import { notesToPlan } from '../music/playback'
+import { emptyPlan, notesToPlan } from '../music/playback'
 import { TIMBRES } from './timbres'
 
 const PLAN = notesToPlan(
@@ -48,7 +48,7 @@ describe('planToVoices', () => {
   })
 
   it('空计划产生零个声部', () => {
-    expect(planToVoices({ events: [], totalDurSec: 0 }, 0)).toEqual([])
+    expect(planToVoices(emptyPlan(), 0)).toEqual([])
   })
 })
 
@@ -59,6 +59,6 @@ describe('planEndSec', () => {
   })
 
   it('空计划的结束时刻等于起点', () => {
-    expect(planEndSec({ events: [], totalDurSec: 0 }, 5)).toBe(5)
+    expect(planEndSec(emptyPlan(), 5)).toBe(5)
   })
 })

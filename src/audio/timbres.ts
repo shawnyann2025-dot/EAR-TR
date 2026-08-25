@@ -1,6 +1,6 @@
 import type { TimbreId } from '../music/playback'
 
-export interface Partial {
+export interface Harmonic {
   /** 相对基频的倍数 */
   ratio: number
   gain: number
@@ -16,17 +16,10 @@ export interface Envelope {
 
 export interface TimbreDef {
   id: TimbreId
-  partials: Partial[]
+  partials: Harmonic[]
   env: Envelope
   oscType: OscillatorType
 }
-
-export const TIMBRE_IDS: readonly TimbreId[] = [
-  'piano',
-  'strings',
-  'voice',
-  'electronic',
-]
 
 /**
  * 加法合成音色。全部由振荡器叠加而成，无外部音频资源（spec §6.2）。
@@ -82,3 +75,10 @@ export const TIMBRES: Record<TimbreId, TimbreDef> = {
     env: { attackSec: 0.01, decaySec: 0.12, sustain: 0.5, releaseSec: 0.12 },
   },
 }
+
+/**
+ * 从 TIMBRES 派生，而非手写字面量：TIMBRES 缺键会编译报错，
+ * 但手写的 TimbreId[] 数组标注下，子集仍然合法、会静默漏音色。
+ * 这是音色变异轴的唯一采样源（rng.pick(TIMBRE_IDS)），必须与 TIMBRES 同步。
+ */
+export const TIMBRE_IDS = Object.keys(TIMBRES) as readonly TimbreId[]

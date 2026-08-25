@@ -32,13 +32,15 @@ describe('buildDegreeProbe', () => {
   })
 
   it('目标音是计划中最后发声的那个音，且音高对应该音级', () => {
-    for (let seed = 0; seed < 30; seed++) {
-      const probe = buildDegreeProbe(seed, 3)
-      const last = probe.plan.events[probe.plan.events.length - 1]
-      const midi = Math.round(69 + 12 * Math.log2(last.freqHz / 440))
-      expect(((midi % 12) + 12) % 12).toBe(
-        degreeToPitchClass(probe.degree, probe.key),
-      )
+    for (const level of LEVELS) {
+      for (let seed = 0; seed < 30; seed++) {
+        const probe = buildDegreeProbe(seed, level)
+        const last = probe.plan.events[probe.plan.events.length - 1]
+        const midi = Math.round(69 + 12 * Math.log2(last.freqHz / 440))
+        expect(((midi % 12) + 12) % 12).toBe(
+          degreeToPitchClass(probe.degree, probe.key),
+        )
+      }
     }
   })
 
