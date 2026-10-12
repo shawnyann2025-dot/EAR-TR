@@ -51,6 +51,8 @@ export interface GateBreakdown {
   both: number
   /** 只列被阻塞的 key */
   rows: KeyGateRow[]
+  /** 实战关是否过；未传 bossPassed 时按 evaluateGate 的同一规则视为过 */
+  bossSatisfied: boolean
 }
 
 /**
@@ -62,6 +64,7 @@ export function gateBreakdown(
   c: Curriculum,
   store: MasteryStore,
   phaseId: PhaseId,
+  bossPassed = true,
 ): GateBreakdown {
   const phase = c.phases.find((p) => p.id === phaseId)
   if (!phase) throw new Error(`未知阶段 ${phaseId}`)
@@ -74,6 +77,7 @@ export function gateBreakdown(
     meanStepOnly: 0,
     both: 0,
     rows: [],
+    bossSatisfied: phase.gate.requiresBoss ? bossPassed : true,
   }
 
   for (const kpId of knowledgePointsOfPhase(c, phaseId)) {
@@ -116,7 +120,8 @@ export function gateBreakdown(
 export function formatGateBreakdown(b: GateBreakdown): string {
   const head =
     `${b.phaseId}: keys=${b.total} ok=${b.passing} ` +
-    `stabOnly=${b.stabilityOnly} stepOnly=${b.meanStepOnly} both=${b.both}`
+    `stabOnly=${b.stabilityOnly} stepOnly=${b.meanStepOnly} both=${b.both} ` +
+    `boss=${b.bossSatisfied ? 'ok' : 'blocked'}`
   const lines = b.rows.map(
     (r) =>
       `  ${r.key} stab=${r.stability.toFixed(1)}/${r.stabilityThreshold} ` +

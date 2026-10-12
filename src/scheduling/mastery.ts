@@ -49,11 +49,19 @@ export const GAIN_A = 1.6
  * 但每个错都会按 LAPSE_C 砍一刀 stability。对一个天天被排到的 key，
  * 答对一次的增益约为 1 + GAIN_A·(1−difficulty)/stability（(1−R) 项在
  * Δt=1 时近似 1/stability），取对数后的期望净增长约为
- * 0.71·GAIN_A·(1−d)/stability + 0.29·ln(LAPSE_C)。
- * LAPSE_C=0.5 时右项为 −0.20，stability 在 ≈7 天处达到平衡再也上不去，
- * 而 P2–P5 的关卡要求 9/12/16/20 天——课程在 P2 之后结构性死锁
- * （实测：P2 的阻塞 key 全部卡在 stability、无一卡在平均档位）。
- * LAPSE_C=0.8 时右项为 −0.065，平衡点抬到 ≈21 天，各阶段关卡均可达。
+ *   0.71·GAIN_A·(1−d)/stability + 0.29·ln(LAPSE_C)
+ * 右项是常数：LAPSE_C=0.5 时为 −0.20，0.8 时为 −0.065——前者让 stability
+ * 在个位数天处就达到平衡再也上不去（180 天仿真实测：天天被排到的 key
+ * 卡在 5.7–7.9 天；P2 的阻塞 key 全部卡在 stability、无一卡在平均档位），
+ * 而 P2–P5 的关卡要求 9/12/16/20 天，课程在 P2 之后结构性死锁。
+ * 0.8 把平衡点抬高约三倍，各阶段关卡均可达。上式是一阶近似，具体平衡
+ * 值以仿真实测为准（diagnostics.ts 的 gateBreakdown 可直接看）。
+ *
+ * 同一层耦合还有一处尚未处理（记为前向约束）：DIFFICULTY_UP/DOWN =
+ * 0.08/0.02 使 difficulty 的期望漂移为 0.08 − 0.10·p，正确率低于 80% 时
+ * difficulty 漂向 1、答对增益趋零。阶梯的设计点 71% 恰在这条线之下——
+ * 当前仿真的正确率落在 0.80–0.84 所以没撞上，但「阶梯制造的错被当成
+ * 遗忘」的问题在 difficulty 这条轴上并未修掉。
  * spec §7.2 明确把 c 列为可调参数。
  */
 export const LAPSE_C = 0.8

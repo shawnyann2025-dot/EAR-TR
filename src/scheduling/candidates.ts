@@ -13,7 +13,7 @@ import {
   type Modality,
   type Track,
 } from '../curriculum/knowledgePoints'
-import type { PhaseId, VariationLevel } from '../curriculum/stages'
+import type { GateSpec, PhaseId, VariationLevel } from '../curriculum/stages'
 import {
   ITEM_SECONDS,
   SESSION_SEGMENTS,
@@ -21,10 +21,12 @@ import {
   type ExerciseSpec,
   type SessionSegment,
 } from './exerciseSpec'
+import { meanLadderStep } from './gating'
 import {
   getMastery,
   isDue,
   retrievability,
+  type MasteryState,
   type MasteryStore,
 } from './mastery'
 
@@ -62,7 +64,45 @@ export function hasBeenIntroduced(
 }
 
 /**
- * stability 最低的模态——拖后腿的优先。
+ * 距关卡的就绪度：两条关卡判据（stability、窗口平均档位）各自与阈值之比，
+ * 取较小者——卡得最紧的那条决定这个 key 离过关有多远。
+ *
+ * 为什么不能只看 stability（裁定 H）：关卡同时要求平均档位，而档位只能
+ * 靠曝光爬。一个模态若早期几次间隔答对把 stability 推到 20+，它既不再
+ * 到期（不进复习段）、又不是 stability 最低的（不进焦点段）——此后几乎
+ * 零曝光，阶梯永远停在 0–1 档，关卡的档位判据对它结构性不可达。
+ * 180 天仿真实测：P2 的阻塞 key 里 stability 18–32、平均档位 1.0–1.65、
+ * 一辈子只做过 8–16 题的正是这类「被饿死」的模态。
+ */
+export function gateReadiness(state: MasteryState, gate: GateSpec): number {
+  return Math.min(
+    state.stability / gate.stabilityThreshold,
+    meanLadderStep(state.window) / gate.meanStepThreshold,
+  )
+}
+
+/**
+ * 三个模态按「离关卡最远者优先」排序：就绪度升序，平局按 stability 升序，
+ * 再平局按 MODALITIES 顺序（全新知识点因此先出听辨——必须先认得出，
+ * 才谈得上唱得出）。
+ */
+export function rankModalities(
+  store: MasteryStore,
+  kpId: KnowledgePointId,
+  gate: GateSpec,
+): Modality[] {
+  return [...MODALITIES].sort((a, b) => {
+    const sa = getMastery(store, masteryKey(kpId, a))
+    const sb = getMastery(store, masteryKey(kpId, b))
+    return (
+      gateReadiness(sa, gate) - gateReadiness(sb, gate) ||
+      sa.stability - sb.stability
+    )
+  })
+}
+
+/**
+ * 拖后腿的模态——离关卡最远的那个优先。
  *
  * 这条直接让「三模态齐平」的关卡变得可达：若焦点段总选最强的模态，
  * 听辨会一路刷满而唱永远不达标，关卡就成了死锁。
@@ -70,17 +110,9 @@ export function hasBeenIntroduced(
 export function weakestModality(
   store: MasteryStore,
   kpId: KnowledgePointId,
+  gate: GateSpec,
 ): Modality {
-  let best: Modality = 'recognize'
-  let lowest = Infinity
-  for (const m of MODALITIES) {
-    const s = getMastery(store, masteryKey(kpId, m)).stability
-    if (s < lowest) {
-      lowest = s
-      best = m
-    }
-  }
-  return best
+  return rankModalities(store, kpId, gate)[0]
 }
 
 /**
@@ -93,7 +125,7 @@ export function weakestModality(
  * 无解（用回溯搜索证实过：某天 23/26 题挤进同一模态，超出
  * MAX_SAME_MODALITY_RUN 的数学上限，不是交错算法的问题）。
  *
- * 这里按公平配额轮询：每个知识点仍按 stability 升序取自己的模态优先级
+ * 这里按公平配额轮询：每个知识点仍按 rankModalities 取自己的模态优先级
  * （与 weakestModality 同一套排序、同一套平局规则），但若某个模态当天
  * 已经分到了「公平份额」（知识点数 / 3 向上取整），后面的知识点改选
  * 自己排位第二的模态，直到它也满额，以此类推。focus 与 boss 复用同一份
@@ -103,16 +135,13 @@ export function weakestModality(
 export function diversifiedFocusModalities(
   store: MasteryStore,
   kpIds: readonly KnowledgePointId[],
+  gate: GateSpec,
 ): Map<KnowledgePointId, Modality> {
   const cap = Math.max(1, Math.ceil(kpIds.length / MODALITIES.length))
   const usage: Record<Modality, number> = { recognize: 0, sing: 0, notate: 0 }
   const result = new Map<KnowledgePointId, Modality>()
   for (const kpId of kpIds) {
-    const ranked = [...MODALITIES].sort(
-      (a, b) =>
-        getMastery(store, masteryKey(kpId, a)).stability -
-        getMastery(store, masteryKey(kpId, b)).stability,
-    )
+    const ranked = rankModalities(store, kpId, gate)
     const chosen = ranked.find((m) => usage[m] < cap) ?? ranked[0]
     usage[chosen]++
     result.set(kpId, chosen)
@@ -219,6 +248,7 @@ function fillToBudget(candidates: ExerciseSpec[], budgetSec: number): ExerciseSp
 function introduceRoundRobin(
   curriculum: Curriculum,
   eligible: KnowledgePointId[],
+  today: number,
 ): KnowledgePointId[] {
   const byTrack = new Map<Track, KnowledgePointId[]>()
   for (const id of eligible) {
@@ -229,7 +259,11 @@ function introduceRoundRobin(
     else byTrack.set(kp.track, [id])
   }
 
-  const tracks = [...byTrack.keys()]
+  // 起始轨道按天轮转：否则桶的顺序永远跟着课程手册（T→H→R），
+  // MAX_NEW_PER_SESSION=2 时 R 轨每个阶段都只能排在最后
+  const keys = [...byTrack.keys()]
+  const offset = keys.length > 0 ? ((today % keys.length) + keys.length) % keys.length : 0
+  const tracks = [...keys.slice(offset), ...keys.slice(0, offset)]
   const picked: KnowledgePointId[] = []
   for (let round = 0; picked.length < MAX_NEW_PER_SESSION; round++) {
     let addedThisRound = false
@@ -251,6 +285,8 @@ export function buildCandidates(
   rng: Rng,
 ): Record<SessionSegment, ExerciseSpec[]> {
   const { curriculum, store, phaseId, today } = input
+  const gate = curriculum.phases.find((p) => p.id === phaseId)?.gate
+  if (!gate) throw new Error(`未知阶段 ${phaseId}`)
   const unlocked = unlockedKnowledgePoints(curriculum, phaseId)
   const introduced = unlocked.filter((id) => hasBeenIntroduced(store, id))
   const phaseKps = knowledgePointsOfPhase(curriculum, phaseId)
@@ -283,9 +319,9 @@ export function buildCandidates(
   // 焦点：当前阶段已引入的知识点，选最弱的模态（同一天跨知识点做模态
   // 分散，避免候选池在模态维度上塌缩——见 diversifiedFocusModalities）
   const focusKps = phaseKps.filter((id) => hasBeenIntroduced(store, id))
-  const focusModalities = diversifiedFocusModalities(store, focusKps)
+  const focusModalities = diversifiedFocusModalities(store, focusKps, gate)
   const focus = focusKps.map((kpId) =>
-    specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId), 'focus', rng),
+    specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId, gate), 'focus', rng),
   )
 
   // 引入：尚未引入、且前置全部已引入的，一次最多 MAX_NEW_PER_SESSION 个。
@@ -298,7 +334,7 @@ export function buildCandidates(
       const kp = curriculum.knowledgePoints.get(id)
       return (kp?.prerequisites ?? []).every((pre) => hasBeenIntroduced(store, pre))
     })
-  const introduce = introduceRoundRobin(curriculum, eligible).map((kpId) =>
+  const introduce = introduceRoundRobin(curriculum, eligible, today).map((kpId) =>
     specFor(input, kpId, 'recognize', 'introduce', rng),
   )
 
@@ -309,7 +345,7 @@ export function buildCandidates(
   // focusKps 是同一个集合，同一 kp 在两段拿到同一个模态
   const boss = allIntroduced
     ? phaseKps.map((kpId) =>
-        specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId), 'boss', rng),
+        specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId, gate), 'boss', rng),
       )
     : []
 

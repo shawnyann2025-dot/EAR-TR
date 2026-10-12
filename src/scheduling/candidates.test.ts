@@ -38,6 +38,22 @@ describe('hasBeenIntroduced', () => {
 })
 
 describe('weakestModality / staleastModality', () => {
+  const GATE = c.phases[0].gate
+
+  it('stability 很高但阶梯没爬起来的模态离关卡更远，优先于 stability 偏低但档位达标的模态（裁定 H）', () => {
+    const kpId = P1_KPS[0]
+    const high = (step: number) =>
+      Array.from({ length: 12 }, (_, i) => ({ correct: true, day: i, difficultyStep: step }))
+    const store = new Map([
+      // 档位达标、stability 略低：就绪度 = min(5/6, 3/1.5) = 0.83
+      [masteryKey(kpId, 'recognize'), seen({ stability: 5, window: high(3) })],
+      // stability 很高但几乎没被练过、档位 0：就绪度 = min(30/6, 0/1.5) = 0
+      [masteryKey(kpId, 'sing'), seen({ stability: 30, window: high(0) })],
+      [masteryKey(kpId, 'notate'), seen({ stability: 20, window: high(3) })],
+    ])
+    expect(weakestModality(store, kpId, GATE)).toBe('sing')
+  })
+
   it('weakestModality 选 stability 最低的模态（拖后腿的优先）', () => {
     const kpId = P1_KPS[0]
     const store = new Map([
@@ -45,7 +61,7 @@ describe('weakestModality / staleastModality', () => {
       [masteryKey(kpId, 'sing'), seen({ stability: 2 })],
       [masteryKey(kpId, 'notate'), seen({ stability: 15 })],
     ])
-    expect(weakestModality(store, kpId)).toBe('sing')
+    expect(weakestModality(store, kpId, GATE)).toBe('sing')
   })
 
   it('staleastModality 选可提取性最低的模态（最接近遗忘的先救）', () => {
@@ -59,7 +75,7 @@ describe('weakestModality / staleastModality', () => {
   })
 
   it('全部未练过时返回 recognize（必须先认得出，才谈得上唱得出）', () => {
-    expect(weakestModality(new Map(), P1_KPS[0])).toBe('recognize')
+    expect(weakestModality(new Map(), P1_KPS[0], GATE)).toBe('recognize')
   })
 })
 

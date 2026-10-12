@@ -4470,6 +4470,11 @@ Expected: FAIL — 无法解析模块 `./runSimulation`
 
 - [ ] **Step 3: 写实现**
 
+> **执行后批注（裁定 C/D/H，2026-10-12）**：下面的参考实现有两处已被裁定推翻，**不要照抄恢复**：
+> 1. `initialLadder(spec.difficultyStep)` 每天从 0 档重建阶梯 → 改为 `resumeLadder(state.window)`（已落到 `src/scheduling/ladder.ts`，从记录尾部还原档位与连对计数，带性质测试）。
+> 2. `applyAttempt(..., ladder.step)` 记的是提问前档位 → 改为记 `applyLadder` 返回的**答后**档位，否则同日第二次曝光触发的升档永远写不进 window。
+> 另外运行时必须在出题前把阶梯档位写进规格（`{ ...planned, difficultyStep: ladder.step }`），计划里的规格 `difficultyStep` 恒为 0。
+
 `src/simulation/runSimulation.ts`：
 
 ```ts

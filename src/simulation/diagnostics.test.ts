@@ -43,9 +43,16 @@ describe('gateBreakdown：关卡阻塞分解', () => {
     }
   })
 
-  it('40 天的普通学习者还没过 P1，必有被阻塞的 key', () => {
-    expect(run.finalPhase).toBe('P1')
-    expect(b.rows.length).toBeGreaterThan(0)
+  it('空 store 上该阶段全部 key 两项判据都卡', () => {
+    const empty = gateBreakdown(c, new Map(), 'P1')
+    expect(empty.passing).toBe(0)
+    expect(empty.both).toBe(empty.total)
+    expect(empty.rows.length).toBe(empty.total)
+    expect(empty.bossSatisfied).toBe(true)
+  })
+
+  it('bossPassed=false 时 bossSatisfied 为 false（P1 要求实战关）', () => {
+    expect(gateBreakdown(c, new Map(), 'P1', false).bossSatisfied).toBe(false)
   })
 
   it('formatGateBreakdown 产出含阶段与计数的可读文本', () => {
@@ -65,12 +72,20 @@ describe('accuracyByStep：阶梯分档正确率', () => {
     expect(rows.reduce((s, r) => s + r.attempts, 0)).toBe(traces.length)
   })
 
-  it('每档的正确率与均值概率都在 0–1 内且自洽', () => {
-    for (const r of rows) {
-      expect(r.accuracy).toBeCloseTo(r.correct / r.attempts, 12)
-      expect(r.meanProbability).toBeGreaterThanOrEqual(0)
-      expect(r.meanProbability).toBeLessThanOrEqual(1)
-    }
+  it('手工构造的轨迹按档位分组后计数、正确率、均值概率都对', () => {
+    const mk = (stepBefore: number, correct: boolean, probability: number): AttemptTrace =>
+      ({ ...traces[0], stepBefore, correct, probability })
+    const rowsFromFixture = accuracyByStep([
+      mk(2, true, 0.25),
+      mk(0, false, 0.4),
+      mk(2, false, 0.5),
+      mk(0, true, 0.6),
+      mk(2, true, 0.75),
+    ])
+    expect(rowsFromFixture).toEqual([
+      { step: 0, attempts: 2, correct: 1, accuracy: 0.5, meanProbability: 0.5 },
+      { step: 2, attempts: 3, correct: 2, accuracy: 2 / 3, meanProbability: 0.5 },
+    ])
   })
 })
 

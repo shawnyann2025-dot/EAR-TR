@@ -24,7 +24,7 @@ import {
   applyLadder,
   LADDER_MAX_STEP,
   LADDER_MIN_STEP,
-  LADDER_UP_AFTER,
+  resumeLadder,
   type LadderState,
 } from '../scheduling/ladder'
 import {
@@ -105,31 +105,6 @@ export interface SimulationResult {
   ladderAccuracy: number
 }
 
-/**
- * 会话内阶梯续起（裁定 D）：不仅续档位，也从 window 尾部推导「连对计数」。
- *
- * 裁定 C 只续了 step，consecutiveCorrect 每天仍从 0 起——这才是「每天只
- * 曝光 1 次的 key 永远爬不动」的真正根因：答对一次 cc 变 1，次日
- * initialLadder 又把 cc 砸回 0，永远够不到 LADDER_UP_AFTER=2，跟正确率
- * 高低完全无关。这里改成从 window 尾部倒着数「同一档位的连续答对」，
- * 不新增任何持久化字段。
- *
- * 依赖裁定 C 的「记答后档位」修复：window 里存的必须是答完那一刻的档位，
- * 否则这里推出的 cc 会对不上实际发生过的连对。
- */
-function resumeLadder(state: MasteryState): LadderState {
-  const step = state.window.at(-1)?.difficultyStep ?? 0
-  let cc = 0
-  for (let i = state.window.length - 1; i >= 0; i--) {
-    const a = state.window[i]
-    if (!a.correct || a.difficultyStep !== step) break
-    cc++
-  }
-  // 正常情况下 cc 只会是 0 或 1：连对 2 次时档位已经升了，
-  // 尾部就不会留下两条同档位的连对记录。取模是防御性的。
-  return { step, consecutiveCorrect: cc % LADDER_UP_AFTER }
-}
-
 function bossPasses(
   curriculum: Curriculum,
   learner: VirtualLearner,
@@ -179,18 +154,27 @@ export function runSimulation(params: SimulationParams): SimulationResult {
     let correctToday = 0
 
     for (const planned of scored) {
-      const spec = needsRelief(progress)
-        ? ((reliefTriggered = true), relieveSpec(planned))
-        : planned
-
-      const key = masteryKey(spec.kpId, spec.modality)
+      const key = masteryKey(planned.kpId, planned.modality)
       // 阶梯续起（裁定 C + D）：会话内状态仍不落盘，但不再每天从
       // step=0、consecutiveCorrect=0 重建——续接上该 key 上次的档位
-      // 与「同一档位的连对计数」（resumeLadder，从 window 尾部推导）。
+      // 与连对计数（resumeLadder，从 window 尾部推导；规则见 ladder.ts）。
       // 只续档位不续连对计数的话，每天只曝光 1 次的 key 永远够不到
       // LADDER_UP_AFTER=2，跟正确率高低无关，meanLadderStep 会恒卡在
       // 0 附近，门控用它当判据就永不可达（已用仿真跟踪实测验证）。
-      const ladder = ladders.get(key) ?? resumeLadder(getMastery(store, key))
+      let ladder = ladders.get(key) ?? resumeLadder(getMastery(store, key).window)
+
+      // 计划里的 difficultyStep 一律是 0（快机制不落盘，spec §7.4.1）；
+      // 运行时在出题前把阶梯档位写进规格——这是 P-2b 生成器拿到的那份
+      // 规格，P-3 会话运行时也必须这样做，否则生成器永远只看到 0 档。
+      let spec: ExerciseSpec = { ...planned, difficultyStep: ladder.step }
+      if (needsRelief(progress)) {
+        // 会话内回血（spec §7.5）：降一档、降一级语境与变异。阶梯跟着
+        // 落到回血后的档位、连对清零——否则下一题又跳回原档。
+        reliefTriggered = true
+        spec = relieveSpec(spec)
+        ladder = { step: spec.difficultyStep, consecutiveCorrect: 0 }
+      }
+
       const ability = learner.abilityOf(key)
       const probability = learner.probabilityOf(spec, ladder.step)
       const correct = learner.answer(spec, ladder.step)
@@ -272,7 +256,7 @@ export function runSimulation(params: SimulationParams): SimulationResult {
       phaseId,
       bossPasses(curriculum, learner, phaseId),
     )
-    if (gate.passed) {
+    if (gate.passed && phaseCompletionDay[phaseId] === undefined) {
       phaseCompletionDay[phaseId] = day
       const next = nextPhase(phaseId)
       if (next) phaseId = next
