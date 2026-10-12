@@ -175,7 +175,15 @@ describe('buildSessionPlan', () => {
     expect(total).toBeLessThanOrEqual(25 * 60)
   })
 
-  it('三个模态状态完全相同时候选会塌缩到单一模态（已知行为，由仿真守卫）', () => {
+  it('三个模态状态完全相同时，focus/boss 段靠模态分散避免塌缩到单一模态', () => {
+    // 曾经的已知行为：weakestModality/staleastModality 在打平时都取
+    // MODALITIES[0]（recognize），若不做任何干预，focus/boss 会让当天
+    // 计分题几乎全部挤进 recognize，交错规则在候选池层面直接无解
+    // （用回溯搜索证实过真实仿真里类似的塌缩天，23/26 题挤进同一模态，
+    // 超出 MAX_SAME_MODALITY_RUN 的数学上限）。
+    // candidates.ts::diversifiedFocusModalities 按公平配额跨知识点轮询
+    // focus/boss 段的模态选择后，即便三态打平，当天的模态分布也会被
+    // 摊开，不再单一模态塌缩，交错规则因此重新可满足。
     const tied = new Map<string, MasteryState>()
     for (const kpId of P1_KPS) {
       for (const m of MODALITIES) {
@@ -184,9 +192,10 @@ describe('buildSessionPlan', () => {
     }
     const plan = buildSessionPlan(input(tied))
     const scored = plan.items.filter((s) => s.segment !== 'warmup')
-    // 打平时 weakestModality/staleastModality 都取 MODALITIES[0]
-    expect(new Set(scored.map((s) => s.modality))).toEqual(new Set(['recognize']))
-    // 此时交错规则结构性不可满足——贪心兜底保证不丢题
     expect(scored.length).toBeGreaterThan(0)
+    expect(new Set(scored.map((s) => s.modality))).toEqual(
+      new Set(['recognize', 'sing', 'notate']),
+    )
+    expect(checkInterleaving(scored)).toEqual([])
   })
 })

@@ -11,6 +11,7 @@ import {
   masteryKey,
   type KnowledgePointId,
   type Modality,
+  type Track,
 } from '../curriculum/knowledgePoints'
 import type { PhaseId, VariationLevel } from '../curriculum/stages'
 import {
@@ -80,6 +81,43 @@ export function weakestModality(
     }
   }
   return best
+}
+
+/**
+ * 同一天 focus/boss 段的模态分散（后备授权，spec §7.4 交错规则的落地）。
+ *
+ * weakestModality 本身「选最弱模态」的语义不变——它是让「三模态齐平」
+ * 关卡可达的机制，不能动。但当天若多个知识点各自独立算出的最弱模态
+ * 恰好都落在同一个模态上（例如某个模态阶段性普遍偏弱），focus/boss
+ * 两段会把几乎全部计分题都堆进那一个模态，候选池在交错规则层面直接
+ * 无解（用回溯搜索证实过：某天 23/26 题挤进同一模态，超出
+ * MAX_SAME_MODALITY_RUN 的数学上限，不是交错算法的问题）。
+ *
+ * 这里按公平配额轮询：每个知识点仍按 stability 升序取自己的模态优先级
+ * （与 weakestModality 同一套排序、同一套平局规则），但若某个模态当天
+ * 已经分到了「公平份额」（知识点数 / 3 向上取整），后面的知识点改选
+ * 自己排位第二的模态，直到它也满额，以此类推。focus 与 boss 复用同一份
+ * 结果（同一 kp 两段选同一模态），保持「当天集中练同一模态两次帮阶梯
+ * 升档」这条设计意图不变。
+ */
+export function diversifiedFocusModalities(
+  store: MasteryStore,
+  kpIds: readonly KnowledgePointId[],
+): Map<KnowledgePointId, Modality> {
+  const cap = Math.max(1, Math.ceil(kpIds.length / MODALITIES.length))
+  const usage: Record<Modality, number> = { recognize: 0, sing: 0, notate: 0 }
+  const result = new Map<KnowledgePointId, Modality>()
+  for (const kpId of kpIds) {
+    const ranked = [...MODALITIES].sort(
+      (a, b) =>
+        getMastery(store, masteryKey(kpId, a)).stability -
+        getMastery(store, masteryKey(kpId, b)).stability,
+    )
+    const chosen = ranked.find((m) => usage[m] < cap) ?? ranked[0]
+    usage[chosen]++
+    result.set(kpId, chosen)
+  }
+  return result
 }
 
 /** 可提取性最低的模态——最接近遗忘的先救 */
@@ -173,6 +211,41 @@ function fillToBudget(candidates: ExerciseSpec[], budgetSec: number): ExerciseSp
   return picked
 }
 
+/**
+ * 从符合条件的候选里按轨道轮询选出至多 MAX_NEW_PER_SESSION 个，
+ * 保证同一天引入的新知识点尽量跨轨道，而不是把某一轨道的知识点用完
+ * 才轮到下一轨道。分组内部保持传入顺序（课程手册里的级/知识点顺序）。
+ */
+function introduceRoundRobin(
+  curriculum: Curriculum,
+  eligible: KnowledgePointId[],
+): KnowledgePointId[] {
+  const byTrack = new Map<Track, KnowledgePointId[]>()
+  for (const id of eligible) {
+    const kp = curriculum.knowledgePoints.get(id)
+    if (!kp) continue
+    const bucket = byTrack.get(kp.track)
+    if (bucket) bucket.push(id)
+    else byTrack.set(kp.track, [id])
+  }
+
+  const tracks = [...byTrack.keys()]
+  const picked: KnowledgePointId[] = []
+  for (let round = 0; picked.length < MAX_NEW_PER_SESSION; round++) {
+    let addedThisRound = false
+    for (const t of tracks) {
+      if (picked.length >= MAX_NEW_PER_SESSION) break
+      const bucket = byTrack.get(t)
+      if (bucket && round < bucket.length) {
+        picked.push(bucket[round])
+        addedThisRound = true
+      }
+    }
+    if (!addedThisRound) break
+  }
+  return picked
+}
+
 export function buildCandidates(
   input: SchedulerInput,
   rng: Rng,
@@ -207,27 +280,36 @@ export function buildCandidates(
     specFor(input, x.kpId, x.modality, 'review', rng),
   )
 
-  // 焦点：当前阶段已引入的知识点，选最弱的模态
-  const focus = phaseKps
-    .filter((id) => hasBeenIntroduced(store, id))
-    .map((kpId) => specFor(input, kpId, weakestModality(store, kpId), 'focus', rng))
+  // 焦点：当前阶段已引入的知识点，选最弱的模态（同一天跨知识点做模态
+  // 分散，避免候选池在模态维度上塌缩——见 diversifiedFocusModalities）
+  const focusKps = phaseKps.filter((id) => hasBeenIntroduced(store, id))
+  const focusModalities = diversifiedFocusModalities(store, focusKps)
+  const focus = focusKps.map((kpId) =>
+    specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId), 'focus', rng),
+  )
 
-  // 引入：尚未引入、且前置全部已引入的，一次最多 MAX_NEW_PER_SESSION 个
-  const introduce = unlocked
+  // 引入：尚未引入、且前置全部已引入的，一次最多 MAX_NEW_PER_SESSION 个。
+  // 按轨道轮询取用（而非数组顺序取前几个）——spec §7.4 不允许单日单轨，
+  // 而 unlockedKnowledgePoints 是按级顺序排列的，同轨道的知识点连在一起，
+  // 顺序取前 N 个会让开局连续几天只引入同一轨道。
+  const eligible = unlocked
     .filter((id) => !hasBeenIntroduced(store, id))
     .filter((id) => {
       const kp = curriculum.knowledgePoints.get(id)
       return (kp?.prerequisites ?? []).every((pre) => hasBeenIntroduced(store, pre))
     })
-    .slice(0, MAX_NEW_PER_SESSION)
-    .map((kpId) => specFor(input, kpId, 'recognize', 'introduce', rng))
+  const introduce = introduceRoundRobin(curriculum, eligible).map((kpId) =>
+    specFor(input, kpId, 'recognize', 'introduce', rng),
+  )
 
   // 实战关：只在该阶段知识点全部引入后才排
   const allIntroduced =
     phaseKps.length > 0 && phaseKps.every((id) => hasBeenIntroduced(store, id))
+  // boss 与 focus 复用同一份分散结果：allIntroduced 时 phaseKps 与
+  // focusKps 是同一个集合，同一 kp 在两段拿到同一个模态
   const boss = allIntroduced
     ? phaseKps.map((kpId) =>
-        specFor(input, kpId, weakestModality(store, kpId), 'boss', rng),
+        specFor(input, kpId, focusModalities.get(kpId) ?? weakestModality(store, kpId), 'boss', rng),
       )
     : []
 

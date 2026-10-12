@@ -13,8 +13,28 @@ export const MODALITY_DEMAND: Record<Modality, number> = {
   notate: 0.12,
 }
 
-/** logistic 斜率：越大，能力与要求的差距对正确率影响越陡 */
-export const LOGISTIC_SLOPE = 8
+/**
+ * logistic 斜率：越大，能力与要求的差距对正确率影响越陡。
+ *
+ * 计划值 8 的过渡带约 ±0.3，Task 15 评审已注明「偏窄但非黑即白，若阶梯
+ * 震荡过大可调低」；Task 16 的恢复点记录为 6（过渡带约 ±0.4，更接近
+ * 知觉判断的真实心理测量曲线）。工作区里一度试过 4.5，那是对着
+ * LAPSE_C 的结构性死锁做的补偿（用更平的曲线制造更多错题），
+ * 死锁修掉后无必要，已回到 6（裁定 G）。
+ */
+export const LOGISTIC_SLOPE = 6
+
+/**
+ * 阶梯档位在题目要求里的权重：0 档到 5 档拉开 0.2 的要求差。
+ *
+ * 这是整条 demandOf 里最弱的一项——语境 0.3、变异 0.2、模态 0.15。
+ * 仿真里学习者的能力会一路涨到 1、跑赢阶段上限，大部分尝试落在
+ * 阶梯封顶的 5 档；在 1–4 档的未饱和区间里，正确率对档位几乎不敏感
+ * （逐档实测 0.80–0.84），所以 180 天仿真里的 ladderAccuracy 反映的是
+ * 「练习整体落在 80% 左右的合意困难区」，而不是阶梯的理论收敛点。
+ * 阶梯本身确实收敛到约 71% 这件事，由固定能力的静态学习者测试单独验证。
+ */
+export const LADDER_DEMAND_WEIGHT = 0.2
 
 export interface LearnerParams {
   seed: number
@@ -40,7 +60,7 @@ export function demandOf(spec: ExerciseSpec, ladderStep: number): number {
   const raw =
     0.3 * (spec.contextLevel / 4) +
     0.2 * (spec.variationLevel / 6) +
-    0.2 * (Math.max(0, ladderStep) / 5) +
+    LADDER_DEMAND_WEIGHT * (Math.max(0, ladderStep) / 5) +
     MODALITY_DEMAND[spec.modality]
   return Math.min(1, Math.max(0, raw))
 }

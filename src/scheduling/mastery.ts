@@ -40,8 +40,23 @@ export const INITIAL_STABILITY = 1
 export const INITIAL_DIFFICULTY = 0.3
 /** 答对时的 stability 增益系数 */
 export const GAIN_A = 1.6
-/** 答错时的 stability 衰减系数 */
-export const LAPSE_C = 0.5
+/**
+ * 答错时的 stability 衰减系数。
+ *
+ * 为什么是 0.8 而不是计划里的 0.5（裁定 G，由 180 天仿真的关卡阻塞分解得出）：
+ * 2-down-1-up 阶梯按设计把正确率压在约 71%（spec §2.9），也就是每道题
+ * 约 29% 的概率答错——这些错是阶梯**故意**制造的合意困难，不是遗忘。
+ * 但每个错都会按 LAPSE_C 砍一刀 stability。对一个天天被排到的 key，
+ * 答对一次的增益约为 1 + GAIN_A·(1−difficulty)/stability（(1−R) 项在
+ * Δt=1 时近似 1/stability），取对数后的期望净增长约为
+ * 0.71·GAIN_A·(1−d)/stability + 0.29·ln(LAPSE_C)。
+ * LAPSE_C=0.5 时右项为 −0.20，stability 在 ≈7 天处达到平衡再也上不去，
+ * 而 P2–P5 的关卡要求 9/12/16/20 天——课程在 P2 之后结构性死锁
+ * （实测：P2 的阻塞 key 全部卡在 stability、无一卡在平均档位）。
+ * LAPSE_C=0.8 时右项为 −0.065，平衡点抬到 ≈21 天，各阶段关卡均可达。
+ * spec §7.2 明确把 c 列为可调参数。
+ */
+export const LAPSE_C = 0.8
 export const DIFFICULTY_UP = 0.08
 export const DIFFICULTY_DOWN = 0.02
 

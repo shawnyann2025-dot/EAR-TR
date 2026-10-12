@@ -10,6 +10,7 @@ import {
   type PlacementState,
 } from './placement'
 import { buildCurriculum, phaseOfKnowledgePoint } from '../curriculum/curriculum'
+import { ALL_STAGES } from '../curriculum/stages'
 
 const c = buildCurriculum()
 
@@ -23,6 +24,17 @@ function runProbes(answers: boolean[]): PlacementState {
 }
 
 describe('placementProbeOrder', () => {
+  it('探针数恰等于 min(有引入的级数, 上限)——等间隔抽取不得因取整撞出重复', () => {
+    // FWD-P2-1：等间隔抽取靠 Math.round 取下标，若级数与上限的比例不巧，
+    // 相邻两个 i 可能落到同一级，去重后探针数会悄悄少于上限。
+    // 当前 23 级 / 12 探针恰好整除（步长 2），这条断言把这个巧合钉住：
+    // 日后级数变动若打破它，这里先红。
+    const stagesWithIntro = ALL_STAGES.filter((s) => s.introduces.length > 0).length
+    expect(placementProbeOrder(c).length).toBe(
+      Math.min(stagesWithIntro, PLACEMENT_MAX_PROBES),
+    )
+  })
+
   it('探针数量不超过上限', () => {
     expect(placementProbeOrder(c).length).toBeLessThanOrEqual(PLACEMENT_MAX_PROBES)
   })
