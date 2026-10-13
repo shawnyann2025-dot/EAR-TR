@@ -79,5 +79,110 @@ export function repositoryContract(
       await a.importAll(empty)
       expect((await a.loadMastery()).size).toBe(0)
     })
+
+    it('latestSessionNo 与导出顺序按数值而非字符串（含跨日前缀）', async () => {
+      const r = await make({})
+      for (const [d, n] of [[11, 0], [1, 10], [2, 3], [1, 9]]) await r.putSession(session(d, n))
+      expect(await r.latestSessionNo(1)).toBe(10)
+      expect(await r.latestSessionNo(11)).toBe(0)
+      expect(await r.latestSessionNo(2)).toBe(3)
+      expect(await r.latestSessionNo(5)).toBeNull()
+      expect((await r.exportAll('x')).sessions.map((s) => [s.day, s.sessionNo])).toEqual([[1, 9], [1, 10], [2, 3], [11, 0]])
+    })
+
+    it('多轮溢出：聚合跨轮累加，保留最新 cap 条且保持插入顺序', async () => {
+      const r = await make({ attemptCap: 3 })
+      const mk = (i: number, kpId: string, modality: 'recognize' | 'sing', correct: boolean): AttemptRecord => ({
+        ...attempt(i, kpId, correct), modality, spec: { ...attempt(i, kpId, correct).spec, modality },
+      })
+      const rows = [
+        mk(0, 'degree:major:do', 'recognize', true),
+        mk(1, 'degree:major:do', 'sing', false),
+        mk(2, 'degree:major:mi', 'recognize', true),
+        mk(3, 'degree:major:do', 'recognize', false),
+        mk(4, 'degree:major:mi', 'sing', true),
+        mk(5, 'degree:major:do', 'recognize', true),
+        mk(6, 'degree:major:mi', 'recognize', true),
+      ]
+      for (const a of rows) await r.appendAttempt(a)
+      expect(await r.countAttempts()).toBe(3)
+      const b = await r.exportAll('x')
+      expect(b.attempts.map((a) => a.spec.seed)).toEqual([4, 5, 6])
+      expect([...b.attemptAggregates].sort((x, y) => x.key.localeCompare(y.key))).toEqual(
+        [
+          { key: masteryKey('degree:major:do', 'recognize'), attempts: 2, correct: 1 },
+          { key: masteryKey('degree:major:do', 'sing'), attempts: 1, correct: 0 },
+          { key: masteryKey('degree:major:mi', 'recognize'), attempts: 1, correct: 1 },
+        ].sort((x, y) => x.key.localeCompare(y.key)),
+      )
+    })
+
+    it('putGate 是追加历史：同 phaseId 重复调用保留两条，按插入顺序', async () => {
+      const r = await make({})
+      await r.putGate({ phaseId: 'P1', passedOnDay: 10 })
+      await r.putGate({ phaseId: 'P2', passedOnDay: 20 })
+      await r.putGate({ phaseId: 'P1', passedOnDay: 30 })
+      expect((await r.exportAll('x')).gates).toEqual([
+        { phaseId: 'P1', passedOnDay: 10 },
+        { phaseId: 'P2', passedOnDay: 20 },
+        { phaseId: 'P1', passedOnDay: 30 },
+      ])
+    })
+
+    it('saveProfile 与 putMastery 覆盖旧值', async () => {
+      const r = await make({})
+      await r.saveProfile(profile())
+      await r.saveProfile({ ...profile(), phaseId: 'P2' })
+      expect((await r.loadProfile())?.phaseId).toBe('P2')
+      const k = masteryKey('degree:major:do', 'sing')
+      await r.putMastery(k, { ...initialMastery(), stability: 2 })
+      await r.putMastery(k, { ...initialMastery(), stability: 9 })
+      const m = await r.loadMastery()
+      expect(m.size).toBe(1)
+      expect(m.get(k)?.stability).toBe(9)
+    })
+
+    it('读出的数据是副本：修改不影响仓库', async () => {
+      const r = await make({})
+      const k = masteryKey('degree:major:do', 'sing')
+      await r.putMastery(k, { ...initialMastery(), stability: 4 })
+      const m = await r.loadMastery()
+      m.delete(k)
+      m.set(masteryKey('x', 'sing'), initialMastery())
+      const s = (await r.loadMastery()).get(k)
+      expect(s?.stability).toBe(4)
+      if (s) s.stability = 99
+      expect((await r.loadMastery()).get(k)?.stability).toBe(4)
+      await r.saveProfile(profile())
+      const p = await r.loadProfile()
+      if (p) p.id = 'changed'
+      expect((await r.loadProfile())?.id).toBe('p1')
+    })
+
+    it('导入整体替换所有存储（档案、掌握度、作答、聚合、会话、关卡）', async () => {
+      const target = await make({ attemptCap: 2 })
+      await target.saveProfile(profile())
+      await target.putMastery(masteryKey('degree:major:re', 'notate'), initialMastery())
+      for (let i = 0; i < 4; i++) await target.appendAttempt(attempt(i, 'degree:major:re'))
+      await target.putSession(session(7, 0))
+      await target.putGate({ phaseId: 'P1', passedOnDay: 5 })
+
+      const src = await make({ attemptCap: 2 })
+      await src.saveProfile({ ...profile(), id: 'other', phaseId: 'P3' })
+      await src.putMastery(masteryKey('chord:I', 'recognize'), { ...initialMastery(), stability: 5 })
+      await src.putMastery(masteryKey('chord:V', 'sing'), { ...initialMastery(), stability: 6 })
+      for (let i = 10; i < 14; i++) await src.appendAttempt(attempt(i, 'chord:I', i % 2 === 0))
+      await src.putSession(session(3, 1))
+      await src.putSession(session(3, 0, true))
+      await src.putGate({ phaseId: 'P2', passedOnDay: 50 })
+      await src.putGate({ phaseId: 'P3', passedOnDay: 90 })
+      const bundle = await src.exportAll('2026-10-13T00:00:00.000Z')
+
+      await target.importAll(bundle)
+      const after = await target.exportAll('2026-10-13T00:00:00.000Z')
+      expect(after).toEqual(bundle)
+      expect(await target.loadSession(7, 0)).toBeNull()
+      expect(await target.countAttempts()).toBe(2)
+    })
   })
 }

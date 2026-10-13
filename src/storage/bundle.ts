@@ -5,6 +5,43 @@ export const MIGRATIONS: Record<number, (b: ExportBundle) => ExportBundle> = {}
 
 const isArray = (x: unknown): x is unknown[] => Array.isArray(x)
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
+const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
+const isStr = (x: unknown): x is string => typeof x === 'string'
+
+function validProfile(p: unknown): boolean {
+  if (!isObj(p)) return false
+  const pl = p.placement
+  return (
+    isStr(p.id) && isStr(p.createdAtLocalDate) && isStr(p.phaseId) && isStr(p.displayScheme) &&
+    isNum(p.schemaVersion) && isObj(pl) && typeof pl.done === 'boolean' && (pl.startPhase === null || isStr(pl.startPhase))
+  )
+}
+function validMasteryPair(pair: unknown): boolean {
+  if (!isArray(pair) || pair.length !== 2 || !isStr(pair[0]) || !isObj(pair[1])) return false
+  const m = pair[1]
+  return (
+    isNum(m.stability) && isNum(m.difficulty) && isNum(m.variationLevel) && isNum(m.contextLevel) &&
+    isArray(m.window) && (m.lastSeenDay === null || isNum(m.lastSeenDay))
+  )
+}
+function validAttempt(a: unknown): boolean {
+  return (
+    isObj(a) && isStr(a.kpId) && isStr(a.modality) && isObj(a.spec) && typeof a.correct === 'boolean' &&
+    isNum(a.day) && isNum(a.sessionNo) && isNum(a.latencyMs)
+  )
+}
+function validSession(s: unknown): boolean {
+  return (
+    isObj(s) && isNum(s.day) && isNum(s.sessionNo) && isNum(s.index) && isObj(s.plan) && isArray(s.plan.items) &&
+    typeof s.completed === 'boolean'
+  )
+}
+function validGate(g: unknown): boolean {
+  return isObj(g) && isStr(g.phaseId) && isNum(g.passedOnDay)
+}
+function validAggregate(a: unknown): boolean {
+  return isObj(a) && isStr(a.key) && isNum(a.attempts) && isNum(a.correct)
+}
 
 /** 校验 + 迁移。失败一律抛 StorageImportError，不产生部分结果 */
 export function parseBundle(json: string): ExportBundle {
@@ -22,11 +59,16 @@ export function parseBundle(json: string): ExportBundle {
     if (!isArray(raw[field])) throw new StorageImportError(`导出包字段 ${field} 缺失或类型错误`)
   }
   if (typeof raw.exportedAt !== 'string') throw new StorageImportError('导出包缺少 exportedAt')
-  if (raw.profile !== null && !isObj(raw.profile)) throw new StorageImportError('导出包 profile 类型错误')
-  for (const pair of raw.mastery as unknown[]) {
-    if (!isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || !isObj(pair[1])) {
-      throw new StorageImportError('导出包 mastery 条目结构不对')
-    }
+  if (raw.profile !== null && !validProfile(raw.profile)) throw new StorageImportError('导出包 profile 结构不对')
+  const checks: [string, unknown[], (x: unknown) => boolean][] = [
+    ['mastery', raw.mastery as unknown[], validMasteryPair],
+    ['attempts', raw.attempts as unknown[], validAttempt],
+    ['attemptAggregates', raw.attemptAggregates as unknown[], validAggregate],
+    ['sessions', raw.sessions as unknown[], validSession],
+    ['gates', raw.gates as unknown[], validGate],
+  ]
+  for (const [field, items, ok] of checks) {
+    if (!items.every(ok)) throw new StorageImportError(`导出包 ${field} 条目结构不对`)
   }
   let bundle = raw as unknown as ExportBundle
   for (let ver = v; ver < SCHEMA_VERSION; ver++) {

@@ -77,11 +77,13 @@ export class MemoryRepository implements Repository {
   }
   async importAll(bundle: ExportBundle) {
     const b = clone(bundle)
+    const mastery = new Map(b.mastery)
+    const sessions = new Map(b.sessions.map((s) => [sessionKey(s.day, s.sessionNo), s]))
     this.profile = b.profile
-    this.mastery = new Map(b.mastery)
+    this.mastery = mastery
     this.attempts = b.attempts
     this.aggregates = b.attemptAggregates
-    this.sessions = new Map(b.sessions.map((s) => [sessionKey(s.day, s.sessionNo), s]))
+    this.sessions = sessions
     this.gates = b.gates
   }
 }

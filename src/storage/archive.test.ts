@@ -29,4 +29,27 @@ describe('archiveOverflow（主 spec §10.2）', () => {
       { key: masteryKey('degree:major:mi', 'recognize'), attempts: 1, correct: 1 },
     ])
   })
+
+  it('cap=0：全部聚合，attempts 为空', () => {
+    const a = [attempt('degree:major:do', true, 0), attempt('degree:major:do', false, 1)]
+    expect(archiveOverflow(a, [], 0)).toEqual({
+      attempts: [],
+      aggregates: [{ key: masteryKey('degree:major:do', 'recognize'), attempts: 2, correct: 1 }],
+    })
+  })
+
+  it('恰好等于 cap：不归档', () => {
+    const a = [attempt('degree:major:do', true, 0), attempt('degree:major:mi', true, 1)]
+    expect(archiveOverflow(a, [], 2)).toEqual({ attempts: a, aggregates: [] })
+  })
+
+  it('不修改输入', () => {
+    const a = [attempt('degree:major:do', true, 0), attempt('degree:major:mi', true, 1)]
+    const g = [{ key: masteryKey('degree:major:do', 'recognize'), attempts: 1, correct: 1 }]
+    const aCopy = structuredClone(a)
+    const gCopy = structuredClone(g)
+    archiveOverflow(a, g, 1)
+    expect(a).toEqual(aCopy)
+    expect(g).toEqual(gCopy)
+  })
 })
