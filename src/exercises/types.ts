@@ -46,6 +46,8 @@ export type Response =
   | { kind: 'sequence'; ids: string[] }
   /** P-2b / P-3：自评。P-4 增加检测结果分支 */
   | { kind: 'pitch'; selfAssessedCorrect: boolean }
+  /** P-4：检测到的各稳定段中位数（Hz），按唱的先后 */
+  | { kind: 'pitch'; sungHz: number[] }
   | { kind: 'tap'; tapsSec: number[] }
 
 export interface ResolvedVariation {
@@ -92,7 +94,7 @@ export interface GradeResult {
   detail:
     | { kind: 'choice' }
     | { kind: 'sequence'; positions: boolean[] }
-    | { kind: 'pitch' }
+    | { kind: 'pitch'; perTarget?: boolean[]; centsOff?: (number | null)[] }
     | { kind: 'tap'; offsetsSec: number[] }
 }
 

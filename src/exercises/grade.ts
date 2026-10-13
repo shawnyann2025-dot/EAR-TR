@@ -1,3 +1,4 @@
+import { judgeSung } from '../pitch/judge'
 import type { Answer, Exercise, GradeResult, Response } from './types'
 
 const TAP_EPSILON = 1e-9
@@ -35,6 +36,10 @@ export function grade(
     }
     case 'pitch': {
       if (response.kind !== 'pitch') return responseMismatch('pitch', response.kind)
+      if ('sungHz' in response) {
+        const j = judgeSung(answer.targets, response.sungHz)
+        return { correct: j.correct, detail: { kind: 'pitch', perTarget: j.perTarget, centsOff: j.centsOff } }
+      }
       return { correct: response.selfAssessedCorrect, detail: { kind: 'pitch' } }
     }
     case 'tap': {
