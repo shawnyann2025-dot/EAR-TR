@@ -190,4 +190,53 @@ describe('真实唱法的稳定段（评审 I1–I4）', () => {
     expect(seg.segments()).toEqual(closed)
     expect(closed.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('196/392 交替 0.6 s（二次谐波强的闪跳）：一个段，196 Hz', () => {
+    const hop = HOP_SIZE / SAMPLE_RATE
+    for (const startHigh of [false, true]) {
+      const seg = createSegmenter({ hopSec: hop })
+      for (let i = 0; i < 56; i++) {
+        const high = (i % 2 === 0) === startHigh
+        seg.push({ f0Hz: high ? 392 : 196, aperiodicity: 0.05, rms: 0.1 }, i * hop)
+      }
+      seg.flush()
+      const segs = seg.segments()
+      expect(segs).toHaveLength(1)
+      expect(Math.abs(cents(segs[0].medianHz, 196))).toBeLessThan(5)
+    }
+  })
+
+  it('八度按多数帧选；恰好 50/50 取较低八度', () => {
+    const hop = HOP_SIZE / SAMPLE_RATE
+    const run = (nHigh: number, nLow: number) => {
+      const seg = createSegmenter({ hopSec: hop })
+      for (let i = 0; i < nHigh + nLow; i++) {
+        seg.push({ f0Hz: i < nHigh ? 392 : 196, aperiodicity: 0.05, rms: 0.1 }, i * hop)
+      }
+      seg.flush()
+      return seg.segments()
+    }
+    for (const [h, l, want] of [[30, 30, 196], [36, 24, 392], [24, 36, 196]] as const) {
+      const segs = run(h, l)
+      expect(segs).toHaveLength(1)
+      expect(Math.abs(cents(segs[0].medianHz, want))).toBeLessThan(5)
+    }
+  })
+
+  it('150 音分/秒的慢滑音随后静音：没有稳定段', () => {
+    expect(segmentSignal(concat(sung(262, [[0, 0], [2, 300]]), silence(0.3)))).toHaveLength(0)
+  })
+
+  it('150 音分/秒的 -300 慢滑入 + 0.8 s 长音：恰好一段，落在目标', () => {
+    const segs = segmentSignal(sung(220, [[0, -300], [2, 0], [2.8, 0]]))
+    expect(segs).toHaveLength(1)
+    expect(Math.abs(cents(segs[0].medianHz, 220))).toBeLessThan(10)
+  })
+
+  it('do 0.5 s + 150 音分/秒的 -150 下滑 + mi 0.5 s：恰好两段', () => {
+    const segs = segmentSignal(sung(262, [[0, 0], [0.5, 0], [1.5, -150], [1.5, 400], [2, 400]]))
+    expect(segs).toHaveLength(2)
+    expect(Math.abs(cents(segs[0].medianHz, 262))).toBeLessThan(10)
+    expect(Math.abs(cents(segs[1].medianHz, 262 * Math.pow(2, 400 / 1200)))).toBeLessThan(10)
+  })
 })

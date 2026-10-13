@@ -35,6 +35,34 @@ function foldTo(hz: number, ref: number): number {
   return hz
 }
 
+/**
+ * 八度稳健的参考音高：
+ * 1. 把所有帧折到第一帧所在八度；2. 取折叠后中位数；3. 把它移到含原始帧最多的八度。
+ * 八度帧数恰好持平时取较低八度。
+ */
+function octaveRef(hzs: number[]): number {
+  const first = hzs[0]
+  const folded = hzs.map((h) => foldTo(h, first))
+  const med = median(folded)
+  const counts = new Map<number, number>()
+  for (let i = 0; i < hzs.length; i++) {
+    const o = Math.round(Math.log2(hzs[i] / folded[i]))
+    counts.set(o, (counts.get(o) ?? 0) + 1)
+  }
+  let bestO = 0
+  let bestN = -1
+  for (const [o, n] of counts) {
+    if (n > bestN || (n === bestN && o < bestO)) {
+      bestO = o
+      bestN = n
+    }
+  }
+  return med * Math.pow(2, bestO)
+}
+
+/** Σ_{k=0..m} k² */
+const sq = (m: number) => (m * (m + 1) * (2 * m + 1)) / 6
+
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b)
   const m = s.length >> 1
@@ -64,7 +92,7 @@ export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {
     const n = frames.length
     if (n === 0) return null
     // 八度折叠：以原始中位数所在八度为准
-    const ref = median(frames.map((f) => f.hz))
+    const ref = octaveRef(frames.map((f) => f.hz))
     const hz = frames.map((f) => foldTo(f.hz, ref))
     const med = median(hz)
     // 平滑（居中滑动平均，边缘截断）
@@ -75,8 +103,9 @@ export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {
     for (const c of raw) pre.push(pre[pre.length - 1] + c)
     const sm: number[] = []
     for (let i = 0; i < n; i++) {
-      const lo = Math.max(0, i - half)
-      const hi = Math.min(n - 1, i + half)
+      const h = Math.min(half, i, n - 1 - i) // 边缘对称收缩，线性轨迹不被压平
+      const lo = i - h
+      const hi = i + h
       sm.push((pre[hi + 1] - pre[lo]) / (hi - lo + 1))
     }
     // 最长稳定核：极差 ≤ 2×抖动 且 最小二乘斜率 ≤ 漂移上限
@@ -85,6 +114,17 @@ export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {
     for (let i = 0; i < n; i++) {
       ps.push(ps[i] + sm[i])
       pts.push(pts[i] + i * hopSec * sm[i])
+    }
+    // [i..j] 上平滑音高的最小二乘斜率（音分/秒），t = k·hopSec
+    const slopeOf = (i: number, j: number): number => {
+      const len = j - i + 1
+      if (len < 2) return 0
+      const sumS = ps[j + 1] - ps[i]
+      const sumTS = pts[j + 1] - pts[i]
+      const sumT = (hopSec * (i + j) * len) / 2
+      const sumTT = hopSec * hopSec * (sq(j) - sq(i - 1))
+      const den = len * sumTT - sumT * sumT
+      return den > 0 ? (len * sumTS - sumT * sumS) / den : 0
     }
     let bestI = -1
     let bestLen = 0
@@ -97,15 +137,13 @@ export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {
         if (mx - mn > 2 * SEGMENT_JITTER_CENTS) break
         const len = j - i + 1
         if (len <= bestLen) continue
-        const sumS = ps[j + 1] - ps[i]
-        const sumTS = pts[j + 1] - pts[i]
-        // t = k·hopSec, k = i..j
-        const sumT = hopSec * ((i + j) * len) / 2
-        let sumTT = 0
-        for (let k = i; k <= j; k++) sumTT += k * hopSec * k * hopSec
-        const den = len * sumTT - sumT * sumT
-        const slope = den > 0 ? (len * sumTS - sumT * sumS) / den : 0
-        if (Math.abs(slope) <= MAX_DRIFT_CENTS_PER_SEC) {
+        // 整段及前后两半的斜率都要在上限内：个别被跳变污染的边缘帧不能把滑音的平均斜率拉低
+        const mid = i + (len >> 1)
+        const ok =
+          Math.abs(slopeOf(i, j)) <= MAX_DRIFT_CENTS_PER_SEC &&
+          (len < 4 ||
+            (Math.abs(slopeOf(i, mid - 1)) <= MAX_DRIFT_CENTS_PER_SEC && Math.abs(slopeOf(mid, j)) <= MAX_DRIFT_CENTS_PER_SEC))
+        if (ok) {
           bestI = i
           bestLen = len
         }
@@ -145,7 +183,7 @@ export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {
         run.push(fr)
         return closed
       }
-      const m = median(run.map((f) => f.hz))
+      const m = octaveRef(run.map((f) => f.hz))
       const dev = Math.abs(cents(foldTo(fr.hz, m), m))
       if (dev > SEGMENT_JUMP_CENTS) {
         pending.push(fr)

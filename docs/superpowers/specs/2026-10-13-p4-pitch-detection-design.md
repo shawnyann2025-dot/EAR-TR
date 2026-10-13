@@ -32,11 +32,15 @@
 
 - 有声帧：`f0Hz !== null`、`aperiodicity ≤ 0.15`、`rms ≥ VOICED_RMS_FACTOR × noiseRms`（`VOICED_RMS_FACTOR = 2`；`noiseRms` 来自 3 秒噪声基线，未知时取 0）。
 - 段（连续有声帧组成的「运行」，收尾时再取稳定核）：
-  - 八度折叠：帧与运行原始中位数相差整数个八度（k≠0）且偏差 ≤ `OCTAVE_FOLD_TOLERANCE_CENTS = 35` 时视为同一音高类（真实 YIN 八度误判落在 2× 附近几音分内；须 < 50，以免吞掉 do→ti 的 1125 音分）。收尾时以运行原始中位数所在八度为准折叠全部帧，故起音处少量 2f0 帧不会改变八度。
-  - 切段：折叠后偏离运行中位数 > `SEGMENT_JUMP_CENTS = 80` 的帧先进入待定列表；待定帧持续 ≥ `SPLIT_PERSIST_SEC = 0.09` 才收尾当前运行（不含待定帧）并以待定帧开新运行；其间若来一帧不偏离的帧，待定帧并回运行（颤音峰或孤立误判）。无声持续 ≥ `GAP_SEC = 0.06` 也收尾（待定帧先并入）。
-  - 平滑：收尾时把折叠后的帧换成相对中位数的音分，做窗长 `SMOOTH_SEC = 0.18`（约一个颤音周期）的居中滑动平均（边缘截断），使宽颤音不丢音。
-  - 稳定核：平滑值中最长的连续窗口，要求极差 ≤ 2 × `SEGMENT_JITTER_CENTS`（30）且最小二乘斜率 ≤ `MAX_DRIFT_CENTS_PER_SEC = 120`；这样滑入、下垂、收尾下滑被修剪，慢滑音不成段。核长 × hop ≥ `MIN_SEGMENT_SEC = 0.15` 才输出，`startSec`/`endSec` 取核首帧/末帧 + hop，`medianHz` 取核内折叠后原始 Hz 的中位数。
+  - 八度折叠与参考音高：帧与参考相差整数个八度（k≠0）且偏差 ≤ `OCTAVE_FOLD_TOLERANCE_CENTS = 35` 时视为同一音高类（真实 YIN 八度误判落在 2× 附近几音分内；须 < 50，以免吞掉 do→ti 的 1125 音分）。参考音高的求法（切段判定与收尾共用）：先把运行内所有帧折到第一帧所在八度，取折叠后中位数，再把它移到含原始帧最多的八度；帧数恰好持平时取较低八度。故起音处少量 2f0 帧、或 50% 闪跳都不会改变八度。
+  - 切段：折叠后偏离参考音高 > `SEGMENT_JUMP_CENTS = 80` 的帧先进入待定列表；待定帧持续 ≥ `SPLIT_PERSIST_SEC = 0.09` 才收尾当前运行（不含待定帧）并以待定帧开新运行；其间若来一帧不偏离的帧，待定帧并回运行（颤音峰或孤立误判）。无声持续 ≥ `GAP_SEC = 0.06` 也收尾（待定帧先并入）。
+  - 平滑：收尾时把折叠后的帧换成相对中位数的音分，做窗长 `SMOOTH_SEC = 0.18`（约一个颤音周期）的居中滑动平均（在运行边缘对称收缩窗口，使线性滑音的斜率不被压平），使宽颤音不丢音。
+  - 稳定核：平滑值中最长的连续窗口，要求极差 ≤ 2 × `SEGMENT_JITTER_CENTS`（30）且最小二乘斜率 ≤ `MAX_DRIFT_CENTS_PER_SEC = 120`（整段及前、后两半分别检查，避免被跳变污染的边缘帧拉低滑音斜率）；这样滑入、下垂、收尾下滑被修剪，慢滑音不成段。核长 × hop ≥ `MIN_SEGMENT_SEC = 0.15` 才输出，`startSec`/`endSec` 取核首帧/末帧 + hop，`medianHz` 取核内折叠后原始 Hz 的中位数。
 - 增量式：`createSegmenter(opts)` 返回 `{ push(frame: PitchFrame, atSec: number): Segment | null; flush(): Segment | null; segments(): Segment[] }`，`Segment = { startSec; endSec; medianHz }`。`push`/`flush` 在一段收尾且合格时返回该段，否则 null；`segments()` 返回迄今全部合格段。
+
+**已知局限：**
+- 极宽且较慢的颤音（如 ±100 音分、4.5 Hz，周期 0.22 s 长于 `SMOOTH_SEC`）平滑后极差仍超限，该音不成段；±60 音分 4.5 Hz 与 ±100 音分 5.5 Hz 以上均正常。
+- 连唱的半音若唱得比 `SEGMENT_JUMP_CENTS = 80` 更窄（如 75 音分），两音会合并成一段（来自规格常量，非实现缺陷）。
 
 ### 3.3 判定（`judge.ts`）
 
