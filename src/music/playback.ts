@@ -57,3 +57,9 @@ export function mergePlans(...plans: PlaybackPlan[]): PlaybackPlan {
 function endOf(events: readonly PlaybackEvent[]): number {
   return events.reduce((max, e) => Math.max(max, e.atSec + e.durSec), 0)
 }
+
+/** 播放选项（音频层解释，music 层只声明） */
+export interface PlayOptions {
+  /** 相对计划起点的秒数：此前本该结束的声部，释音尾巴截到这里（FWD-5） */
+  cutContextAtSec?: number
+}

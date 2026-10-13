@@ -20,7 +20,7 @@ function fakes() {
   let stopped = 0
   const audio: AudioPort = {
     currentTime: 0,
-    play: (plan) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
+    play: (plan, _opts) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
     stopAll: () => { stopped++ },
   }
   const pending: (() => void)[] = []
@@ -431,5 +431,25 @@ describe('Profile 与导入导出', () => {
     expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
     expect(rt.getSnapshot().session).toBe(session)
     expect(rt.getSnapshot().lastBackup).toBeNull()
+  })
+})
+
+describe('播放信息', () => {
+  it('play 时把 cutContextAtSec 交给音频，并在快照里给出 playback；中断后清空', async () => {
+    const d = deps(new MemoryRepository())
+    const optsSeen: unknown[] = []
+    const play = d.audio.play
+    d.audio.play = (plan, opts) => {
+      optsSeen.push(opts)
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    const s = rt.getSnapshot()
+    const csec = s.session!.current!.exercise.contentStartSec
+    expect(optsSeen.at(-1)).toEqual({ cutContextAtSec: csec })
+    expect(s.playback).toEqual({ startSec: 0, contentStartSec: csec })
+    await rt.dispatch({ type: 'interrupted' })
+    expect(rt.getSnapshot().playback).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
-import type { PlaybackPlan } from '../music/playback'
-import { planEndSec, planToVoices, type Voice } from './voices'
+import type { PlaybackPlan, PlayOptions } from '../music/playback'
+import { planToVoices, trimContextTails, type Voice } from './voices'
 
 /** 总输出衰减，避免多声部叠加削波 */
 const MASTER_GAIN = 0.6
@@ -27,12 +27,34 @@ export class AudioEngine {
   play(
     plan: PlaybackPlan,
     delaySec: number = DEFAULT_DELAY_SEC,
+    opts: PlayOptions = {},
   ): { startSec: number; endSec: number } {
     const startSec = this.ctx.currentTime + delaySec
-    for (const voice of planToVoices(plan, startSec)) {
-      this.spawn(voice)
+    let voices = planToVoices(plan, startSec)
+    if (opts.cutContextAtSec !== undefined) {
+      voices = trimContextTails(voices, startSec + opts.cutContextAtSec)
     }
-    return { startSec, endSec: planEndSec(plan, startSec) }
+    for (const voice of voices) this.spawn(voice)
+    return { startSec, endSec: voices.reduce((max, v) => Math.max(max, v.stopSec), startSec) }
+  }
+
+  get state(): AudioContextState {
+    return this.ctx.state
+  }
+
+  /** 输出延迟（秒）：outputLatency → baseLatency → 0（P-3 spec §6.5） */
+  get outputLatencySec(): number {
+    const o = (this.ctx as { outputLatency?: number }).outputLatency
+    if (typeof o === 'number' && Number.isFinite(o) && o > 0) return o
+    const b = (this.ctx as { baseLatency?: number }).baseLatency
+    return typeof b === 'number' && Number.isFinite(b) && b > 0 ? b : 0
+  }
+
+  /** 监听 AudioContext 状态变化（被系统挂起即视为中断，P-3 spec §6.6） */
+  onStateChange(fn: (state: AudioContextState) => void): () => void {
+    const handler = () => fn(this.ctx.state)
+    this.ctx.addEventListener('statechange', handler)
+    return () => this.ctx.removeEventListener('statechange', handler)
   }
 
   /** 仍在 active 中的节点数（FWD-1：已结束的节点应已移除） */

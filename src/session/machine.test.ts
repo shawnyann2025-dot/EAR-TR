@@ -17,6 +17,13 @@ function freshSession(): SessionState {
 const types = (effects: SessionEffect[]) => effects.map((e) => e.type)
 
 describe('出题', () => {
+  it('play 副作用带上题目内容起点', () => {
+    const r = reduce(freshSession(), { type: 'start' }, ctx())
+    const play = r.effects[0]
+    if (play.type !== 'play') throw new Error('应先 play')
+    expect(play.contentStartSec).toBe(r.state.current!.exercise.contentStartSec)
+  })
+
   it('start：出第一道计划题并播放，进入 presenting', () => {
     const s0 = freshSession()
     const r = reduce(s0, { type: 'start' }, ctx())
