@@ -240,7 +240,7 @@ L3–L4 才是真正的相对音高能力。设计意图是逼迫学习者从"�
 | 轴 | 取值 |
 |---|---|
 | 调 | 12 个 |
-| 音区 | ±2 个八度 |
+| 音区 | ±1 个八度（P-2b 修订：原 ±2 八度会把持续低音推到听阈之下；整份 plan 另行八度折叠到 MIDI 36–96，见 FWD-4） |
 | 音色 | ≥4 种（钢琴类、弦乐类、人声类、电子类），全部 Web Audio 合成 |
 | 速度 | 阶段相关区间 |
 | 力度 | 区间随机 |
@@ -660,6 +660,7 @@ P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。�
 **FWD-2 · `accent` 与「力度」变异轴争夺同一个 `gain` 字段（影响 P-2）**
 `rhythm.ts` 的 `TimedOnset` 有 `accent: boolean`，而 `playback.ts` 的 `NoteSpec`/`PlaybackEvent` 只有一个 `gain: number`。§6.2 的变异轴 5「力度」也要写 `gain`。且 `TimedOnset → NoteSpec` 的桥接函数目前根本不存在。
 **修法**：P-2 落地 R 轨前先定清楚合成规则（`gain = baseVelocity × accentFactor` 或其他）。现在定比事后拆便宜。
+**状态（P-2b-T，已关闭）**：规则定为 `gain = velocity × (accent ? 1.0 : 0.75)`，桥接函数 `onsetsToNotes` 落在 `music/rhythm.ts`。旋律内容的每个音视为重音。
 
 **FWD-3 · `chordToMidi` 无独立低音声部（影响 P-2/P-3 的 H6）**
 现实现是密集排列的向上旋转：`inversion=2` 的 C 和弦是 `[67,72,76]`，低音从 C4 升到了 G4。这对 H6「转位与低音线听辨——扒和弦的实战关键」不够用，低音线训练需要低音待在低音区、上方声部另行排列。
@@ -668,6 +669,7 @@ P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。�
 **FWD-4 · 音区变异轴需要整体钳制，不只是 drone（影响 P-2）**
 §6.2 的 `variationLevel 3` 开放音区（±2 个八度）后：`centerMidi` 可低至 36，使调性语境的持续低音掉到 MIDI 18（约 23 Hz）——低于人耳下限，手机扬声器根本发不出。同一个轴也抬高目标音与和弦：四音和弦 `inversion=3` 在根音之上再堆最多 +36 半音，配合 `centerMidi=84` 顶音可到 MIDI 100 上下。
 **修法**：钳制做在 `centerMidi` 入口或整个 `PlaybackPlan` 上，而不是只给 drone 打补丁。
+**状态（P-2b-T，已关闭）**：两层都做了。音区中心随机范围收到 MIDI 48–72；整份 plan（语境、内容、反馈）最后经 `foldPlanToRange` 八度折叠到 MIDI 36–96。属性测试对随机规格断言全部音高在区间内。
 
 **FWD-5 · `GAP_SEC` 与 `releaseSec` 跨层不协调（影响 P-3）**
 `tonalContext.ts` 的 `GAP_SEC = 0.35` 在 music 层选定，而释音尾巴 `releaseSec` 定义在 audio 层——按 §3.2 的分层契约，music 层不可能知道它。实测后果：`strings` 音色（`releaseSec = 0.45`）下，L0 终止式末尾主和弦的 `stopSec` = 2.10，而目标音在 `leadInSec` = 2.0 起音，**尾音溢入目标音 0.10 秒**。其余三种音色不溢出。
