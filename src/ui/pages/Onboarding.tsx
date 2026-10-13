@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { buildCurriculum } from '../../curriculum/curriculum'
 import type { PhaseId } from '../../curriculum/stages'
 import { generate, grade, type Exercise, type Response } from '../../exercises/generate'
@@ -27,6 +27,8 @@ export function Onboarding() {
   const scheme = snap.profile!.displayScheme
   const [step, setStep] = useState<Step>({ kind: 'intro' })
   const [error, setError] = useState<string | null>(null)
+  const [retryState, setRetryState] = useState<PlacementState | null>(null)
+  const busy = useRef(false)
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
 
   const present = useCallback(
@@ -41,27 +43,62 @@ export function Onboarding() {
     [audio, profileId],
   )
 
+  const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+  // 展示下一状态；失败则留在当前屏，显示错误并记下待重试的状态
+  const go = useCallback(
+    (state: PlacementState) => {
+      try {
+        const next = present(state)
+        if (next.kind === 'result') audio.stopAll()
+        setStep(next)
+        setError(null)
+        setRetryState(null)
+      } catch (e) {
+        setError(msg(e))
+        setRetryState(state)
+      }
+    },
+    [present, audio],
+  )
+
   const answer = useCallback(
     (r: Response) => {
       if (step.kind !== 'probe') return
       // 副作用（播放下一题）不放进 setState 的更新函数里：StrictMode 下更新函数可能执行两次
-      setStep(present(recordProbe(step.state, grade(step.exercise, r).correct)))
+      go(recordProbe(step.state, grade(step.exercise, r).correct))
     },
-    [present, step],
+    [go, step],
   )
 
   const playTarget = useCallback(() => {
     if (step.kind !== 'probe') return
-    audio.stopAll()
-    audio.play(step.exercise.feedback.replay)
+    try {
+      audio.stopAll()
+      audio.play(step.exercise.feedback.replay)
+    } catch (e) {
+      setError(msg(e))
+    }
   }, [audio, step])
 
   async function start() {
+    if (busy.current) return
+    busy.current = true
     try {
       await audio.unlock()
-      setStep(present(initialPlacement(curriculum)))
+      go(initialPlacement(curriculum))
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(msg(e))
+    } finally {
+      busy.current = false
+    }
+  }
+
+  async function finish(phaseId: PhaseId) {
+    try {
+      await runtime.updateProfile({ phaseId, placement: { done: true, startPhase: phaseId } })
+    } catch (e) {
+      setError(msg(e))
     }
   }
 
@@ -74,7 +111,7 @@ export function Onboarding() {
         <p>先做一个约 5 分钟的分级测试，找到适合你的起点。</p>
         {error && <p className="error">{error}</p>}
         <button type="button" className="primary big" onClick={() => void start()}>开始分级测试</button>
-        <button type="button" onClick={() => setStep({ kind: 'result', phaseId: 'P1' })}>跳过，从头开始</button>
+        <button type="button" onClick={() => { setError(null); setStep({ kind: 'result', phaseId: 'P1' }) }}>跳过，从头开始</button>
       </main>
     )
   }
@@ -86,10 +123,11 @@ export function Onboarding() {
         <h1>分级完成</h1>
         <p>从 {step.phaseId}（{label}）开始。</p>
         <p>音域测定将在后续版本加入。</p>
+        {error && <p className="error">{error}</p>}
         <button
           type="button"
           className="primary big"
-          onClick={() => void runtime.updateProfile({ phaseId: step.phaseId, placement: { done: true, startPhase: step.phaseId } })}
+          onClick={() => void finish(step.phaseId)}
         >
           开始练习
         </button>
@@ -108,14 +146,24 @@ export function Onboarding() {
           <button
             type="button"
             onClick={() => {
-              audio.stopAll()
-              audio.play(step.exercise.plan, { cutContextAtSec: step.exercise.contentStartSec })
+              try {
+                audio.stopAll()
+                audio.play(step.exercise.plan, { cutContextAtSec: step.exercise.contentStartSec })
+              } catch (e) {
+                setError(msg(e))
+              }
             }}
           >
             重听
           </button>
         )}
       </section>
+      {error && (
+        <div>
+          <p className="error">{error}</p>
+          {retryState && <button type="button" onClick={() => go(retryState)}>重试</button>}
+        </div>
+      )}
       <section className="answer-zone">
         <AnswerArea
           key={step.state.results.length}
