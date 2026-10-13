@@ -6,6 +6,7 @@ import { buildSessionPlan } from '../scheduling/scheduler'
 import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
 import { dayIndex, sessionSeed } from '../session/time'
 import { SESSION_MINUTES, type SessionEffect, type SessionEvent, type SessionState } from '../session/types'
+import { parseBundle } from '../storage/bundle'
 import { SCHEMA_VERSION, type Profile, type Repository } from '../storage/types'
 
 export interface AudioPort {
@@ -36,6 +37,8 @@ export interface RuntimeSnapshot {
   lastError: string | null
   /** 落盘失败的原因（只读降级时设置；不会被 itemError 覆盖） */
   storageError: string | null
+  /** 最近一次导入前自动导出的备份（JSON 字符串）；未导入过为 null */
+  lastBackup: string | null
 }
 
 export interface Runtime {
@@ -47,12 +50,17 @@ export interface Runtime {
   startExtra(): Promise<void>
   startDrill(): Promise<void>
   dispatch(event: SessionEvent): Promise<void>
+  /** 合并补丁到当前 Profile 并保存（缓存与落盘同步更新） */
+  updateProfile(patch: Partial<Omit<Profile, 'id' | 'schemaVersion'>>): Promise<Profile>
+  exportBundle(): Promise<string>
+  /** 先校验（坏包抛 StorageImportError，不动任何数据），再自动备份、替换、重置缓存 */
+  importBundle(json: string): Promise<void>
 }
 
 /** 薄壳（P-3 spec §5）：持有状态与掌握度副本，按顺序执行状态机的副作用 */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const { repo, audio, timer, curriculum } = deps
-  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null }
+  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null }
   let mastery = new Map<MasteryKey, MasteryState>()
   let cancelTimer: (() => void) | null = null
   let queue: Promise<void> = Promise.resolve()
@@ -101,6 +109,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       await write(() => repo.saveProfile(p!))
     }
     set({ profile: p })
+    notify()
     return p
   }
 
@@ -129,7 +138,10 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       case 'saveSession':
         return write(() => repo.putSession(effect.record))
       case 'advancePhase': {
-        const p = { ...(snapshot.profile ?? (await ensureProfileNow())), phaseId: effect.to }
+        const cur = snapshot.profile ?? (await ensureProfileNow())
+        // 已在目标阶段（例如被杀掉的会话重新结算）：不重复保存，也不重复记关卡
+        if (cur.phaseId === effect.to) return
+        const p = { ...cur, phaseId: effect.to }
         set({ profile: p })
         await write(() => repo.saveProfile(p))
         return write(() => repo.putGate({ phaseId: effect.from, passedOnDay: effect.day }))
@@ -229,5 +241,23 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       await dispatchNow({ type: 'start' })
     }),
     dispatch,
+    updateProfile: (patch) => serial(async () => {
+      const p = { ...(await ensureProfileNow()), ...patch }
+      set({ profile: p })
+      await write(() => repo.saveProfile(p))
+      notify()
+      return p
+    }),
+    exportBundle: () => serial(async () => JSON.stringify(await repo.exportAll(deps.nowIso()))),
+    importBundle: (json) => serial(async () => {
+      const bundle = parseBundle(json) // 先校验：失败即抛，不碰任何东西
+      const backup = JSON.stringify(await repo.exportAll(deps.nowIso()))
+      await run({ type: 'stopAudio' }) // 有进行中的会话时停播并取消计时
+      await repo.importAll(bundle)
+      mastery = new Map()
+      set({ profile: null, session: null, lastBackup: backup })
+      await ensureProfileNow()
+      notify()
+    }),
   }
 }

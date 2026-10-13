@@ -199,7 +199,7 @@ function answer(
         modality: cur.spec.modality,
         spec: cur.spec,
         correct: result.correct,
-        latencyMs: event.latencyMs,
+        latencyMs: Number.isFinite(event.latencyMs) && event.latencyMs >= 0 ? event.latencyMs : 0,
         detail: result.detail,
       },
     })

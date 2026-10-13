@@ -84,7 +84,7 @@ interface SessionState {
    - 热身题（`segment === 'warmup'`）不计分：不改阶梯、不写作答、不写掌握度。
    - 计分题：`applyLadder` → `applyAttempt(state, correct, day, steppedLadder.step)`（记答后档位）→ `applyGating(…, requirementFor(…))`；更新 `progress`；实战关段的题同时更新 `boss`；答错的实时规格追加到 `wrongThisSession`。
    - 副作用：「写一条作答」「写回该 key 的掌握度」「写会话进度」；进入 `feedback`，反馈内容取 `exercise.feedback`。
-6. 下一题 → `index + 1`；计划用完进入结束流程（3.6）。
+6. `index` 在提交作答时就加 1，并随同一次「写会话进度」落盘（续起因此不会重出已答的题）；「下一题」只出第 `index` 道，计划用完进入结束流程（3.6）。
 
 唱模态在 P-4 之前用自评作答（`{ kind: 'pitch', selfAssessedCorrect }`）。
 
@@ -226,7 +226,10 @@ interface Repository {
 
 ## 5. 薄壳（P-3a，`src/runtime/`）
 
-`createRuntime({ repo, audio, clock, curriculum })` 返回一个可订阅对象：
+`createRuntime(deps: RuntimeDeps)` 返回一个可订阅的 `Runtime`，其中 `RuntimeDeps = { repo, audio, timer, curriculum, nowIso, todayLocalDate, newProfileId }`（`audio: AudioPort`、`timer: TimerPort` 均为可注入的端口）。`Runtime` 的方法：`getSnapshot`、`subscribe`、`ensureProfile`、`todayStatus`、`startToday`、`startExtra`、`startDrill`、`dispatch`，以及档案与数据操作 `updateProfile(patch)`、`exportBundle()`、`importBundle(json)`。
+
+- **档案缓存不会过期**：`Profile` 只经运行时修改。`updateProfile` 合并补丁、保存并通知；升阶段总是基于最新缓存（已在目标阶段则不重复保存、不重复记关卡）。
+- **导入**：`importBundle(json)` 先 `parseBundle`（坏包抛 `StorageImportError`，不动任何数据），再自动导出当前数据（放在快照的 `lastBackup`），有进行中的会话先停播，然后 `importAll`，重置档案、会话与掌握度副本并重新加载档案。以上三个操作与其余入口走同一条串行队列。
 
 - 持有 `SessionState` 与掌握度内存副本；`dispatch(event)` 调 `reduce`，按顺序执行副作用（播放、落盘、结束回调），然后通知订阅者。所有会改状态的操作经同一条队列串行执行。
 - **快照**：`getSnapshot()` 里 `storageError` 是独立字段，专供「只读警告」展示，与 `lastError` 分开。

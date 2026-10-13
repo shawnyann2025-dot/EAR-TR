@@ -10,7 +10,7 @@ import type { MasteryState } from '../scheduling/mastery'
 import { initialMastery } from '../scheduling/mastery'
 import type { SessionRecord } from '../session/types'
 import { MemoryRepository } from '../storage/memory'
-import type { Repository } from '../storage/types'
+import { StorageImportError, type Repository } from '../storage/types'
 import { createRuntime, type AudioPort, type RuntimeDeps, type TimerPort } from './runtime'
 
 const c = buildCurriculum()
@@ -315,5 +315,121 @@ describe('createRuntime', () => {
     await rt.startDrill()
     expect(rt.getSnapshot().session?.mode).toBe('drill')
     expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
+  })
+})
+
+describe('Profile 与导入导出', () => {
+  const strongMastery = (): MasteryState => ({
+    ...initialMastery(),
+    stability: 20,
+    contextLevel: 1,
+    variationLevel: 1,
+    window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: 10 + i, difficultyStep: 3 })),
+    lastSeenDay: 29,
+  })
+  const profileOf = (phaseId: 'P1' | 'P2'): import('../storage/types').Profile => ({
+    id: 'p-test', createdAtLocalDate: '2026-09-13', phaseId, displayScheme: 'solfege', placement: { done: false, startPhase: null }, schemaVersion: 1,
+  })
+  /** 今天（第 30 天）的主线记录：无题可答、实战关 5/5，开场即结算并升阶段 */
+  const finishingRecord = (): SessionRecord => ({
+    day: 30, sessionNo: 0, phaseId: 'P1', plan: { day: 30, seed: 1, phaseId: 'P1', items: [] }, index: 0,
+    progress: { attempted: 0, correct: 0 }, boss: { attempted: 5, correct: 5 }, byTrack: { T: 0, H: 0, R: 0 }, reliefTriggered: false, completed: false,
+  })
+  async function seedStrongP1(repo: Repository, phaseId: 'P1' | 'P2') {
+    for (const kp of knowledgePointsOfPhase(c, 'P1')) for (const m of MODALITIES) await repo.putMastery(masteryKey(kp, m), strongMastery())
+    await repo.saveProfile(profileOf(phaseId))
+    await repo.putSession(finishingRecord())
+  }
+
+  it('updateProfile：合并补丁、落盘、更新快照并通知', async () => {
+    const repo = new MemoryRepository()
+    const rt = createRuntime(deps(repo))
+    let notified = 0
+    rt.subscribe(() => notified++)
+    const p = await rt.updateProfile({ displayScheme: 'numeric' })
+    expect(p.displayScheme).toBe('numeric')
+    expect(rt.getSnapshot().profile?.displayScheme).toBe('numeric')
+    expect((await repo.loadProfile())?.displayScheme).toBe('numeric')
+    expect(notified).toBeGreaterThan(0)
+    const q = await rt.updateProfile({ placement: { done: true, startPhase: 'P2' }, phaseId: 'P2' })
+    expect(q).toMatchObject({ displayScheme: 'numeric', phaseId: 'P2', id: 'p-test' })
+    expect(await repo.loadProfile()).toEqual(q)
+  })
+
+  it('updateProfile 之后升阶段不会把 displayScheme 写回旧值', async () => {
+    const repo = new MemoryRepository()
+    await seedStrongP1(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.updateProfile({ displayScheme: 'numeric' })
+    await rt.startToday()
+    expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+    expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+  })
+
+  it('已在目标阶段时重新结算：不重复保存 Profile，也不重复记关卡', async () => {
+    const repo = new MemoryRepository()
+    await seedStrongP1(repo, 'P2') // 模拟：升阶段已落盘，但会话记录没来得及标完成就被杀
+    const rt = createRuntime(deps(repo))
+    await rt.startToday()
+    expect(rt.getSnapshot().session?.phase).toBe('done')
+    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([])
+  })
+
+  it('ensureProfile 建出 Profile 后通知订阅者', async () => {
+    const rt = createRuntime(deps(new MemoryRepository()))
+    const seen: (string | undefined)[] = []
+    rt.subscribe((s) => seen.push(s.profile?.id))
+    await rt.ensureProfile()
+    expect(seen).toContain('p-test')
+  })
+
+  it('importBundle：自动备份旧数据，替换数据，重置会话/档案/掌握度副本', async () => {
+    const repoA = new MemoryRepository()
+    const dA = deps(repoA)
+    dA.newProfileId = () => 'p-A'
+    const rtA = createRuntime(dA)
+    await rtA.startToday()
+    await playThrough(rtA, dA.flush, 3)
+    const bundleA = await rtA.exportBundle()
+
+    const repoB = new MemoryRepository()
+    const dB = deps(repoB)
+    dB.newProfileId = () => 'p-B'
+    const rtB = createRuntime(dB)
+    await rtB.startToday() // B 有一场进行中的会话
+    expect(rtB.getSnapshot().session).not.toBeNull()
+    const stoppedBefore = dB.stoppedCount()
+    const bBefore = await rtB.exportBundle()
+
+    await rtB.importBundle(bundleA)
+    expect(dB.stoppedCount()).toBeGreaterThan(stoppedBefore)
+    const snap = rtB.getSnapshot()
+    expect(snap.session).toBeNull()
+    expect(snap.profile?.id).toBe('p-A')
+    expect(snap.lastBackup).toBe(bBefore)
+    expect(JSON.parse(snap.lastBackup!).profile.id).toBe('p-B')
+    const after = await repoB.exportAll('x')
+    const orig = JSON.parse(bundleA)
+    expect(after.profile).toEqual(orig.profile)
+    expect(after.sessions).toEqual(orig.sessions)
+    expect(after.attempts).toEqual(orig.attempts)
+    // 掌握度副本已重置：续起 A 的会话时按导入的数据运行
+    await rtB.startToday()
+    expect(rtB.getSnapshot().session?.index).toBe(JSON.parse(bundleA).sessions[0].index)
+  })
+
+  it('importBundle：坏 JSON 抛 StorageImportError，仓库与运行时都不变', async () => {
+    const repo = new MemoryRepository()
+    const d = deps(repo)
+    const rt = createRuntime(d)
+    await rt.startToday()
+    const before = JSON.stringify(await repo.exportAll('x'))
+    const session = rt.getSnapshot().session
+    await expect(rt.importBundle('{坏的')).rejects.toBeInstanceOf(StorageImportError)
+    await expect(rt.importBundle(JSON.stringify({ schemaVersion: 1 }))).rejects.toBeInstanceOf(StorageImportError)
+    expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
+    expect(rt.getSnapshot().session).toBe(session)
+    expect(rt.getSnapshot().lastBackup).toBeNull()
   })
 })

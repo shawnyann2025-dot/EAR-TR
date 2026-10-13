@@ -149,3 +149,55 @@ describe('计划用完', () => {
     expect(save.record.completed).toBe(true)
   })
 })
+
+describe('实战关计数与作答延迟', () => {
+  function wrongFor(s: SessionState) {
+    const ans = s.current!.exercise.answer
+    return ans.kind === 'choice' ? { kind: 'choice' as const, id: '__wrong__' }
+      : ans.kind === 'sequence' ? { kind: 'sequence' as const, ids: [] }
+      : ans.kind === 'pitch' ? { kind: 'pitch' as const, selfAssessedCorrect: false }
+      : { kind: 'tap' as const, tapsSec: [] }
+  }
+  /** 真实计划里取一道计分题，再造 2 道同规格的实战关题（segment 改为 boss），组成手工计划 */
+  function bossSession(): SessionState {
+    const plan = buildSessionPlan({ curriculum: c, store: new Map(), phaseId: 'P1', today: 0, seed: 11, minutes: SESSION_MINUTES })
+    const other = plan.items.find((i) => i.segment !== 'boss' && i.segment !== 'warmup')!
+    const boss = { ...other, segment: 'boss' as const }
+    return createSession({ mode: 'session', day: 0, sessionNo: 0, phaseId: 'P1', plan: { ...plan, items: [other, boss, boss] } })
+  }
+  const toAnswering = (s: SessionState, ev: 'start' | 'next') => reduce(reduce(s, { type: ev }, ctx()).state, { type: 'contentPlayed' }, ctx()).state
+
+  it('实战关题计入 boss；非实战关计分题不动 boss', () => {
+    let s = toAnswering(bossSession(), 'start')
+    expect(s.current!.scored).toBe(true)
+    s = reduce(s, { type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs: 100 }, ctx()).state
+    expect(s.progress.attempted).toBe(1)
+    expect(s.boss).toEqual({ attempted: 0, correct: 0 })
+
+    s = toAnswering(s, 'next')
+    expect(s.current!.spec.segment).toBe('boss')
+    s = reduce(s, { type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs: 100 }, ctx()).state
+    expect(s.boss).toEqual({ attempted: 1, correct: 1 })
+
+    s = toAnswering(s, 'next')
+    expect(s.current!.spec.segment).toBe('boss')
+    const r = reduce(s, { type: 'answer', response: wrongFor(s), latencyMs: 100 }, ctx())
+    expect(r.state.boss).toEqual({ attempted: 2, correct: 1 })
+    const saved = r.effects.find((e) => e.type === 'saveSession')
+    expect(saved && saved.type === 'saveSession' && saved.record.boss).toEqual({ attempted: 2, correct: 1 })
+  })
+
+  it('latencyMs 非有限或为负时记为 0', () => {
+    const answerWith = (latencyMs: number) => {
+      const s = toAnswering(bossSession(), 'start')
+      const r = reduce(s, { type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs }, ctx())
+      const e = r.effects.find((x) => x.type === 'saveAttempt')
+      if (!e || e.type !== 'saveAttempt') throw new Error('no attempt')
+      return e.attempt.latencyMs
+    }
+    expect(answerWith(NaN)).toBe(0)
+    expect(answerWith(Infinity)).toBe(0)
+    expect(answerWith(-5)).toBe(0)
+    expect(answerWith(742)).toBe(742)
+  })
+})
