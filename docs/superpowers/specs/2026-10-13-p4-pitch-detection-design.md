@@ -63,7 +63,8 @@
 
 ### 4.1 收音（`src/audio/`）
 
-- `pitchWorklet.ts`（AudioWorkletProcessor）：只缓冲样本、每 hop 512 取最近 2048 样本帧，调用 `yinFrame`（从 `src/pitch/yin.ts` 打包进 worklet），把 `{ f0Hz, aperiodicity, rms, atSec }` 经 `port` 发回。处理核心抽成纯函数 `frameSlicer` 单测。
+- `pitchWorklet.ts`（AudioWorkletProcessor）：只缓冲样本、每 hop 512 切出最近 2048 样本帧，经 `port` 把帧（与帧时刻）转发出去；**不在音频线程里跑 YIN**。YIN 在专用 Worker（或主线程）里对每帧调用 `yinFrame`，结果 `{ f0Hz, aperiodicity, rms, atSec }` 交给分段器。（P-4a 评审裁定：单帧 YIN 桌面约 1.3 ms，手机预计 4–6 ms，超过 128 样本渲染块的 2.67 ms 预算。）处理核心抽成纯函数 `frameSlicer` 单测。
+- `AudioContext` 以 `sampleRate: 48000` 创建（96 kHz 设备上 `tauMax` 会被帧长截断，最低可测音升到约 94 Hz）。
 - `MicCapture`：`getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })` → `MediaStreamSource` → worklet；`calibrate(3)` 收 3 秒算 `noiseRms`；`start(onFrame)` / `stop()`；失败分类为 `'denied' | 'unsupported' | 'error'`。
 - 只在作答阶段收音；目标音只在反馈阶段播放——播放时不收音（主 spec §9 的「目标音播放期间暂停采集」）。
 
