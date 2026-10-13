@@ -103,3 +103,61 @@ describe('answerAsResponse', () => {
     }
   })
 })
+
+describe('grade：先统一校验题目自身的格式（P-2b spec §14）', () => {
+  it('format 与 answer 种类不一致时抛错，消息含两者', () => {
+    const broken = {
+      format: { kind: 'choice' as const, options: [{ id: 'a' }] },
+      answer: { kind: 'sequence' as const, ids: ['a'] },
+    }
+    expect(() => grade(broken, { kind: 'sequence', ids: ['a'] })).toThrow(/choice.*sequence|sequence.*choice/)
+  })
+
+  it('作答种类不一致时的消息把作答种类当作「收到的」', () => {
+    expect(() => grade(tap, { kind: 'choice', id: 're' })).toThrow(/作答格式 choice/)
+  })
+})
+
+describe('grade：打拍边界（P-2b spec §14）', () => {
+  // 容差与偏差都取二进制可精确表示的数，避免浮点误差左右边界判定
+  const exact: Gradable = {
+    format: { kind: 'tap', onsetsSec: [0, 0.5, 1, 1.5], toleranceSec: 0.125 },
+    answer: { kind: 'tap', onsetsSec: [0, 0.5, 1, 1.5] },
+  }
+
+  it('偏差恰等于容差：对', () => {
+    expect(grade(exact, { kind: 'tap', tapsSec: [0, 0.625, 1, 1.5] }).correct).toBe(true)
+  })
+
+  it('偏差刚超过容差：错', () => {
+    expect(grade(exact, { kind: 'tap', tapsSec: [0, 0.6251, 1, 1.5] }).correct).toBe(false)
+  })
+
+  it('负偏差（抢拍）同样按绝对值判', () => {
+    const r = grade(exact, { kind: 'tap', tapsSec: [0, 0.375, 1, 1.5] })
+    expect(r.correct).toBe(true)
+    if (r.detail.kind !== 'tap') throw new Error('detail 类型错')
+    expect(r.detail.offsetsSec[1]).toBeCloseTo(-0.125, 12)
+    expect(grade(exact, { kind: 'tap', tapsSec: [0, 0.37, 1, 1.5] }).correct).toBe(false)
+  })
+
+  it('多点：错，偏差按目标长度给出', () => {
+    const r = grade(exact, { kind: 'tap', tapsSec: [0, 0.5, 1, 1.5, 2] })
+    expect(r.correct).toBe(false)
+    if (r.detail.kind !== 'tap') throw new Error('detail 类型错')
+    expect(r.detail.offsetsSec).toHaveLength(4)
+  })
+
+  it('首击晚到、其后每下都偏早：平移后看出节奏错', () => {
+    expect(grade(exact, { kind: 'tap', tapsSec: [0.3, 0.6, 1.1, 1.6] }).correct).toBe(false)
+  })
+})
+
+describe('grade：听写作答比答案长', () => {
+  it('整体错，逐位按答案长度给出', () => {
+    expect(grade(sequence, { kind: 'sequence', ids: ['do', 'mi', 're', 'fa'] })).toEqual({
+      correct: false,
+      detail: { kind: 'sequence', positions: [true, true, true] },
+    })
+  })
+})
