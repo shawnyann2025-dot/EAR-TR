@@ -33,6 +33,7 @@ export interface BeatOnePassage {
   startPulse: number
   /** 第 1 小节第一个音的序号（1 起） */
   answerIndex: number
+  /** 候选序号 '2'…（不含 '1'：答案恒 ≥ 2），最多到第 8 个音 */
   candidates: string[]
 }
 
@@ -46,14 +47,19 @@ export function beatOnePassage(input: GeneratorInput, fullBars: number): BeatOne
   for (let b = 1; b <= fullBars; b++) events.push(...randomPulseFill(meter, b, rng))
   const onsets = placedToOnsets(events, bars, input.resolved.bpm)
   const inBar0 = events.filter((e) => e.bar === 0).length
-  const total = Math.min(onsets.length, BEAT_ONE_MAX_CANDIDATES)
+  const last = Math.min(onsets.length, BEAT_ONE_MAX_CANDIDATES)
+  // 第 0 小节至少有一个音，答案序号恒 ≥ 2：候选不含 '1'，否则它一眼就是错的
+  const candidates = Array.from({ length: Math.max(0, last - 1) }, (_, i) => String(i + 2))
+  if (candidates.length < 2 || !candidates.includes(String(inBar0 + 1))) {
+    throw new Error(`找 beat 1 的候选不足或不含答案：音数 ${onsets.length}，答案 ${inBar0 + 1}`)
+  }
   return {
     bars,
     onsets,
     durSec: barsDurSec(bars, input.resolved.bpm),
     startPulse,
     answerIndex: inBar0 + 1,
-    candidates: Array.from({ length: total }, (_, i) => String(i + 1)),
+    candidates,
   }
 }
 
@@ -61,7 +67,7 @@ export function beatOnePassage(input: GeneratorInput, fullBars: number): BeatOne
 export const PICKUP_START_PULSE: Record<PickupId, number> = { none: 4, half: 3, one: 3 }
 
 function shifted(onsets: readonly TimedOnset[], sec: number): TimedOnset[] {
-  return onsets.map((o) => ({ ...o, atSec: o.atSec - sec }))
+  return onsets.map((o) => ({ ...o, atSec: Math.max(0, o.atSec - sec) }))
 }
 
 function listenedNotes(onsets: readonly TimedOnset[], input: GeneratorInput) {

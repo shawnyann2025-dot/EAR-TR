@@ -158,3 +158,31 @@ describe('弱起·startPulse', () => {
     }
   })
 })
+
+describe('fix round 1', () => {
+  it('找 beat 1 的候选从 2 起：不含 1、含答案、至少 2 个；听辨选项也不含 1', () => {
+    for (const seed of SEEDS) {
+      const input = generatorInput('rhythm:beat-one', 'recognize', { seed })
+      const p = beatOnePassage(input, 2)
+      expect(p.candidates).not.toContain('1')
+      expect(p.candidates).toContain(String(p.answerIndex))
+      expect(p.candidates.length).toBeGreaterThanOrEqual(2)
+      const r = BEAT_ONE_GENERATORS.recognize(generatorInput('rhythm:beat-one', 'recognize', { seed, step: 0 }))
+      if (r.format.kind !== 'choice') throw new Error('格式错')
+      expect(r.format.options.map((o) => o.id)).not.toContain('1')
+    }
+  })
+
+  it('任何内容音的 atSec 都不为负', () => {
+    for (const seed of SEEDS) {
+      for (const m of ['recognize', 'sing', 'notate'] as const) {
+        for (const r of [
+          BEAT_ONE_GENERATORS[m](generatorInput('rhythm:beat-one', m, { seed })),
+          ANACRUSIS_GENERATORS[m](generatorInput('rhythm:anacrusis', m, { seed })),
+        ]) {
+          for (const n of r.notes) expect(n.atSec).toBeGreaterThanOrEqual(0)
+        }
+      }
+    }
+  })
+})
