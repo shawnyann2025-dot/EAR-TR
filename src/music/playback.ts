@@ -6,12 +6,17 @@ import { midiToFreq } from './pitch'
  */
 export type TimbreId = 'piano' | 'strings' | 'voice' | 'electronic'
 
+/** 鼓（P-5）：不进音色变异轴；有 drum 的事件忽略 freqHz 与 timbreId */
+export type DrumId = 'kick' | 'snare' | 'hat'
+
 export interface PlaybackEvent {
   atSec: number
   freqHz: number
   durSec: number
   timbreId: TimbreId
   gain: number
+  /** 鼓事件（P-5）；有它时 freqHz 与 timbreId 无意义 */
+  drum?: DrumId
 }
 
 /**

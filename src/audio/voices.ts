@@ -15,7 +15,7 @@ export interface Voice {
  * 因此播放调度逻辑可以在 Node 下完整单测。
  */
 export function planToVoices(plan: PlaybackPlan, startSec: number): Voice[] {
-  return plan.events.map((e) => {
+  return plan.events.filter((e) => e.drum === undefined).map((e) => {
     const timbre = TIMBRES[e.timbreId]
     return {
       startSec: startSec + e.atSec,

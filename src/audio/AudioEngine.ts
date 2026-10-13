@@ -1,4 +1,5 @@
-import type { PlaybackPlan, PlayOptions } from '../music/playback'
+import type { DrumId, PlaybackPlan, PlayOptions } from '../music/playback'
+import { DRUMS } from './drums'
 import { planToVoices, trimContextTails, type Voice } from './voices'
 
 /** 总输出衰减，避免多声部叠加削波 */
@@ -11,6 +12,7 @@ const DEFAULT_DELAY_SEC = 0.12
  */
 export class AudioEngine {
   private active: { disconnect(): void }[] = []
+  private noise: AudioBuffer | null = null
 
   constructor(private readonly ctx: AudioContext) {}
 
@@ -40,7 +42,14 @@ export class AudioEngine {
       voices = trimContextTails(voices, startSec + opts.cutContextAtSec)
     }
     for (const voice of voices) this.spawn(voice)
-    return { startSec, endSec: voices.reduce((max, v) => Math.max(max, v.stopSec), startSec) }
+    let endSec = voices.reduce((max, v) => Math.max(max, v.stopSec), startSec)
+    for (const e of plan.events) {
+      if (!e.drum) continue
+      const at = startSec + e.atSec
+      this.spawnDrum(e.drum, at, e.gain)
+      endSec = Math.max(endSec, at + DRUMS[e.drum].decaySec)
+    }
+    return { startSec, endSec }
   }
 
   get state(): AudioContextState {
@@ -92,6 +101,55 @@ export class AudioEngine {
   dispose(): void {
     this.stopAll()
     void this.ctx.close()
+  }
+
+  /** 1 秒白噪声，确定性（LCG），全引擎共享 */
+  private noiseBuffer(): AudioBuffer {
+    if (this.noise) return this.noise
+    const sr = this.ctx.sampleRate || 48000
+    const buf = this.ctx.createBuffer(1, sr, sr)
+    const data = buf.getChannelData(0)
+    let s = 12345
+    for (let i = 0; i < data.length; i++) {
+      s = (Math.imul(s, 1103515245) + 12345) >>> 0
+      data[i] = (s / 0xffffffff) * 2 - 1
+    }
+    this.noise = buf
+    return buf
+  }
+
+  private spawnDrum(drum: DrumId, atSec: number, gain: number): void {
+    const def = DRUMS[drum]
+    const end = atSec + def.decaySec
+    const amp = this.ctx.createGain()
+    amp.connect(this.ctx.destination)
+    amp.gain.setValueAtTime(def.peak * gain * MASTER_GAIN, atSec)
+    amp.gain.linearRampToValueAtTime(0, end)
+    const nodes: { disconnect(): void }[] = [amp]
+    let source: AudioScheduledSourceNode
+    if (def.kind === 'tone') {
+      const osc = this.ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(def.startHz!, atSec)
+      osc.frequency.exponentialRampToValueAtTime(def.endHz!, atSec + def.dropSec!)
+      osc.connect(amp)
+      source = osc
+    } else {
+      const src = this.ctx.createBufferSource()
+      src.buffer = this.noiseBuffer()
+      const filter = this.ctx.createBiquadFilter()
+      filter.type = def.filter!.type
+      filter.frequency.setValueAtTime(def.filter!.hz, atSec)
+      src.connect(filter)
+      filter.connect(amp)
+      nodes.push(filter)
+      source = src
+    }
+    nodes.push(source)
+    this.active.push(...nodes)
+    source.onended = () => this.release(nodes)
+    source.start(atSec)
+    source.stop(end)
   }
 
   private spawn(voice: Voice): void {
