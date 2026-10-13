@@ -520,7 +520,7 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 ### 10.1 实体
 
 ```ts
-Profile       { id, createdAtLocalDate, phaseId, displayScheme, placement, schemaVersion }
+Profile       { id, createdAtLocalDate, phaseId, displayScheme, placement, schemaVersion, vocalRange?, singMode?, micFallbackReason? }
 MasteryState  （按 MasteryKey 存，结构见 §7.1）
 Attempt       { at, day, sessionNo, kpId, modality, spec, correct, latencyMs, detail }
 SessionRecord { day, sessionNo, phaseId, plan, index, progress, boss, byTrack, reliefTriggered, completed }
@@ -567,6 +567,7 @@ AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚�
 |---|---|
 | 麦克风权限拒绝 | 唱模态转**自评模式**：播目标 → 用户唱 → 自行点选"唱对了 / 没唱对"。判定不可信，但 audiation 训练价值保留 |
 | AudioWorklet 不支持 | 同上 |
+| 题中收音出错 | 本题改为自评控件，下一题重试检测（P-4b） |
 | IndexedDB 不可用（隐私模式） | 内存存储 + 顶部常驻警告"本次进度不会保存" |
 | AudioContext 创建失败 | 明确提示浏览器不支持，不静默失败 |
 | 数据 schema 损坏 | 导出损坏副本 → 重建 → 提示用户 |

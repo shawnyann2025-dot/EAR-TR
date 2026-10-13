@@ -101,6 +101,15 @@
 | 题中收音出错 | 本题改自评，下一题重试检测 |
 | 没唱 / 没有稳定段 | 判错，反馈「没听到你唱」并播目标音 |
 
+**状态（P-4b）**：已实现。音频线程只切帧（`src/audio/pitchWorklet.ts`，worklet 只切帧），YIN 与分段在 Worker（`pitchWorker.ts` → 纯函数 `pitchPipeline.ts`）；`vite.config` 设 `worker: { format: 'es' }`，dev 下才会以模块 Worker 提供。`openMic` 依赖全部可注入；界面经 `SingMic` 接口使用麦克风（`createLazyMic`）。搬入音域加了下限：搬移后计划里最低事件不低于 MIDI 36。`Profile.vocalRange` 为 `undefined` 表示从未问过（首次使用后进入音域页），`null` 表示跳过。
+
+- 校准只发生在首页与音域测定页（首次打开时 3 秒）；练习中的各题沿用上一次的噪声基线，不再校准。
+- 某次麦克风会话失败后丢弃该会话，下一题重新打开。
+- 麦克风在一场练习结束、`pagehide`、离开音域测定页时关闭（释放录音指示）。
+- `SingMic` 顺序约定：`start()` 在真正开始收音后才 resolve；`stop()` 只在 `start()` 落定之后调用；`start()` 被拒则不再 `stop()`。
+- 看门狗：`STOP_WATCHDOG_SEC = 3`（stop 超时）、`START_WATCHDOG_SEC = 8`（start 超时），超时则本题回落自评。
+- 回落提示显示在可关闭的横幅里。
+
 ## 5. 测试
 
 **P-4a**
