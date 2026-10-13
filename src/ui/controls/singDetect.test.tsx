@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Segment } from '../../pitch/segments'
 import { SING_HINT, captureTimeoutSec, type SingMic } from '../singMic'
-import { SingDetectControl, STOP_WATCHDOG_SEC } from './SingDetectControl'
+import { SingDetectControl, START_WATCHDOG_SEC, STOP_WATCHDOG_SEC } from './SingDetectControl'
 
 afterEach(cleanup)
 
@@ -135,8 +135,9 @@ function manualSchedule() {
     items.push(it)
     return () => { it.live = false }
   }
+  const liveSecs = () => items.filter((i) => i.live).map((i) => i.sec)
   const fire = (sec?: number) => items.filter((i) => i.live && (sec === undefined || i.sec === sec)).forEach((i) => i.fn())
-  return { schedule, items, fire }
+  return { schedule, items, fire, liveSecs }
 }
 const base = { targetsText: 'do', targetCount: 1, onPlayTarget: vi.fn() }
 
@@ -167,11 +168,11 @@ describe('SingDetectControl：start/stop 顺序与回退（评审 I-1 / I-2 / M-
     await flush()
     expect(screen.getByText('准备收音…')).toBeTruthy()
     expect(screen.getByRole('button', { name: '唱完了' })).toHaveProperty('disabled', true)
-    expect(sch.items.length).toBe(0)
+    expect(sch.liveSecs()).toEqual([START_WATCHDOG_SEC]) // 只有启动看门狗，尚无收音超时
     await act(async () => { resolveStart() })
     await flush()
     expect(screen.getByText(/正在听/)).toBeTruthy()
-    expect(sch.items.map((i) => i.sec)).toEqual([6])
+    expect(sch.liveSecs()).toEqual([6]) // 启动看门狗已取消
     expect(screen.getByRole('button', { name: '唱完了' })).toHaveProperty('disabled', false)
   })
 
@@ -220,5 +221,73 @@ describe('SingDetectControl：start/stop 顺序与回退（评审 I-1 / I-2 / M-
     await flush()
     expect(screen.getByText(/收音出错/)).toBeTruthy()
     expect(onResponse).not.toHaveBeenCalled()
+  })
+})
+
+describe('SingDetectControl：启动看门狗与 stop 门闩', () => {
+  it('START_WATCHDOG_SEC = CALIBRATE_SEC(3) + 5', () => {
+    expect(START_WATCHDOG_SEC).toBe(8)
+  })
+
+  it('start 一直不落定：看门狗到点改为自评，不提交', async () => {
+    const mic = fakeMic()
+    mic.start = () => new Promise<void>(() => {})
+    const onResponse = vi.fn()
+    const sch = manualSchedule()
+    render(<SingDetectControl {...base} enabled mic={mic} schedule={sch.schedule} onResponse={onResponse} />)
+    await flush()
+    expect(screen.getByText('准备收音…')).toBeTruthy()
+    act(() => sch.fire(START_WATCHDOG_SEC))
+    await flush()
+    expect(screen.getByText(/收音出错，本题改为自评/)).toBeTruthy()
+    expect(onResponse).not.toHaveBeenCalled()
+    expect(sch.liveSecs()).not.toContain(6) // 没有收音超时计时
+  })
+
+  it('看门狗之后 start 迟到 resolve：停掉这次收音，忽略结果，仍是自评', async () => {
+    let resolveStart!: () => void
+    const mic = fakeMic()
+    mic.start = () => new Promise<void>((r) => { resolveStart = r })
+    const onResponse = vi.fn()
+    const sch = manualSchedule()
+    render(<SingDetectControl {...base} enabled mic={mic} schedule={sch.schedule} onResponse={onResponse} />)
+    await flush()
+    act(() => sch.fire(START_WATCHDOG_SEC))
+    await flush()
+    expect(mic.stops).toBe(0)
+    await act(async () => { resolveStart() })
+    await flush()
+    expect(mic.stops).toBe(1)
+    expect(screen.getByText(/收音出错，本题改为自评/)).toBeTruthy()
+    expect(sch.liveSecs()).toEqual([]) // 不开收音超时
+    expect(onResponse).not.toHaveBeenCalled()
+  })
+
+  it('看门狗后卸载，start 迟到：只停一次', async () => {
+    let resolveStart!: () => void
+    const mic = fakeMic()
+    mic.start = () => new Promise<void>((r) => { resolveStart = r })
+    const sch = manualSchedule()
+    const { unmount } = render(<SingDetectControl {...base} enabled mic={mic} schedule={sch.schedule} onResponse={vi.fn()} />)
+    await flush()
+    act(() => sch.fire(START_WATCHDOG_SEC))
+    unmount()
+    await act(async () => { resolveStart() })
+    await flush()
+    expect(mic.stops).toBe(1)
+  })
+
+  it('stop 门闩只等 stop 发出：上一轮 stop 不落定，下一轮 start 仍会开始', async () => {
+    const mic = fakeMic()
+    mic.stop = () => new Promise<Segment[]>(() => {})
+    const start = vi.spyOn(mic, 'start')
+    const props = { ...base, mic, schedule: () => () => {}, onResponse: vi.fn() }
+    const { rerender } = render(<SingDetectControl {...props} enabled />)
+    await flush()
+    rerender(<SingDetectControl {...props} enabled={false} />)
+    await flush()
+    rerender(<SingDetectControl {...props} enabled />)
+    await flush()
+    expect(start).toHaveBeenCalledTimes(2)
   })
 })

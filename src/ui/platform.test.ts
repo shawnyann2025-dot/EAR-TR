@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AudioEngine } from '../audio/AudioEngine'
 import { MemoryRepository } from '../storage/memory'
 import { StorageCorruptError, StorageUnavailableError } from '../storage/types'
-import { boot, createLazyAudio, newId } from './platform'
+import { MicError, type MicSession } from '../audio/micCapture'
+import { boot, createLazyAudio, createLazyMic, newId, type LazyAudio } from './platform'
 
 const fixedNow = () => new Date(2026, 9, 13, 9, 0)
 
@@ -101,5 +102,51 @@ describe('newId', () => {
     const id = newId()
     expect(id.length).toBeGreaterThan(6)
     expect(newId()).not.toBe(id)
+  })
+})
+
+describe('createLazyMic', () => {
+  const audioWith = (context: AudioContext | null) => ({ context } as unknown as LazyAudio)
+  const session = (): MicSession & { calibrations: number } => {
+    const s = {
+      calibrations: 0,
+      noiseRms: 0,
+      calibrate: async () => { s.calibrations++; return 0.01 },
+      start: vi.fn(),
+      stop: async () => [],
+      close: vi.fn(),
+    }
+    return s
+  }
+
+  it('音频未解锁时 ensure 抛错', async () => {
+    await expect(createLazyMic(audioWith(null), async () => session()).ensure()).rejects.toThrow('音频尚未启用')
+  })
+
+  it('只打开、校准一次；start 前自动 ensure', async () => {
+    const s = session()
+    const open = vi.fn(async () => s)
+    const mic = createLazyMic(audioWith({} as AudioContext), open)
+    await mic.ensure()
+    await mic.start(() => {})
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(s.calibrations).toBe(1)
+    expect(s.start).toHaveBeenCalled()
+  })
+
+  it('打开失败：记下原因并抛出', async () => {
+    const mic = createLazyMic(audioWith({} as AudioContext), async () => { throw new MicError('denied', '没有麦克风权限') })
+    await expect(mic.ensure()).rejects.toMatchObject({ reason: 'denied' })
+    expect(mic.failure).toBe('denied')
+  })
+
+  it('start 在会话 start 执行之后才 resolve；没有会话时 stop 返回 []', async () => {
+    const s = session()
+    const order: string[] = []
+    s.start = vi.fn(() => { order.push('session.start') })
+    const mic = createLazyMic(audioWith({} as AudioContext), async () => s)
+    expect(await mic.stop()).toEqual([])
+    await mic.start(() => {}).then(() => order.push('resolved'))
+    expect(order).toEqual(['session.start', 'resolved'])
   })
 })

@@ -39,7 +39,7 @@ function EndSessionButton(props: { onEnd: () => void }) {
 }
 
 export function Practice() {
-  const { runtime, audio } = useRuntime()
+  const { runtime, audio, mic } = useRuntime()
   const snap = useSnapshot()
   const session = snap.session!
   const cur = session.current
@@ -59,6 +59,9 @@ export function Practice() {
   phaseRef.current = session.phase
   const endEarly = () => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
+
+  const singMode = snap.profile?.singMode ?? 'detect'
+  const sing = useMemo(() => ({ mode: singMode, mic }), [singMode, mic])
 
   const live = session.phase === 'presenting' || session.phase === 'answering'
   useWakeLock(live || session.phase === 'feedback')
@@ -192,6 +195,7 @@ export function Practice() {
             schedule={schedule}
             onPlayTarget={playTarget}
             onResponse={respond}
+            sing={sing}
           />
         )}
       </section>

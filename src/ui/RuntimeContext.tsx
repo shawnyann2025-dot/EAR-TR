@@ -1,16 +1,20 @@
-import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { Runtime, RuntimeSnapshot } from '../runtime/runtime'
 import type { LazyAudio } from './platform'
+import type { SingMic } from './singMic'
 
 interface Ctx {
   runtime: Runtime
   audio: LazyAudio
+  mic: SingMic
 }
 
 const RuntimeCtx = createContext<Ctx | null>(null)
 
-export function RuntimeProvider(props: { runtime: Runtime; audio: LazyAudio; children: ReactNode }) {
-  return <RuntimeCtx.Provider value={{ runtime: props.runtime, audio: props.audio }}>{props.children}</RuntimeCtx.Provider>
+export function RuntimeProvider(props: { runtime: Runtime; audio: LazyAudio; mic: SingMic; children: ReactNode }) {
+  const { runtime, audio, mic } = props
+  const value = useMemo(() => ({ runtime, audio, mic }), [runtime, audio, mic])
+  return <RuntimeCtx.Provider value={value}>{props.children}</RuntimeCtx.Provider>
 }
 
 export function useRuntime(): Ctx {

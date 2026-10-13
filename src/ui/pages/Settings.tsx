@@ -50,6 +50,20 @@ export function Settings(props: { onBack: () => void }) {
           </label>
         ))}
       </fieldset>
+      <fieldset>
+        <legend>唱题判定</legend>
+        <label>
+          <input type="radio" name="singMode" checked={(snap.profile?.singMode ?? 'detect') === 'detect'} onChange={() => void guard(() => runtime.updateProfile({ singMode: 'detect', micFallbackReason: undefined }))} />
+          音高检测
+        </label>
+        <label>
+          <input type="radio" name="singMode" checked={snap.profile?.singMode === 'self'} onChange={() => void guard(() => runtime.updateProfile({ singMode: 'self' }))} />
+          自评
+        </label>
+      </fieldset>
+      {snap.profile?.micFallbackReason && (
+        <p className="small">{snap.profile.micFallbackReason === 'denied' ? '之前没有麦克风权限，已改为自评。允许权限后可切回音高检测。' : '此浏览器不支持收音，已改为自评。'}</p>
+      )}
       <section>
         <button type="button" onClick={() => void guard(async () => downloadText(`ear-tr-备份-${today()}.json`, await runtime.exportBundle()))}>导出备份</button>
         <label className="file-btn">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { MicError } from '../../audio/micCapture'
 import { buildCurriculum } from '../../curriculum/curriculum'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
@@ -6,10 +7,12 @@ const curriculum = buildCurriculum()
 type Status = 'notStarted' | 'inProgress' | 'mainDone'
 
 export function Home(props: { onOpenSettings: () => void }) {
-  const { runtime, audio } = useRuntime()
+  const { runtime, audio, mic } = useRuntime()
   const snap = useSnapshot()
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
 
   const aliveRef = useRef(true)
   const refresh = useCallback(async () => {
@@ -44,6 +47,21 @@ export function Home(props: { onOpenSettings: () => void }) {
   async function go(extra: boolean) {
     try {
       await audio.unlock()
+      if ((snap.profile?.singMode ?? 'detect') === 'detect') {
+        setBusy('正在校准环境噪声，请保持安静…')
+        try {
+          await mic.ensure()
+        } catch (e) {
+          if (e instanceof MicError && (e.reason === 'denied' || e.reason === 'unsupported')) {
+            await runtime.updateProfile({ singMode: 'self', micFallbackReason: e.reason })
+            setNotice(e.reason === 'denied' ? '没有麦克风权限，唱题改为自评' : '此浏览器不支持收音，唱题改为自评')
+          } else {
+            setNotice(`麦克风暂时不可用：${e instanceof Error ? e.message : String(e)}`)
+          }
+        } finally {
+          setBusy(null)
+        }
+      }
       if (extra) await runtime.startExtra()
       else await runtime.startToday()
     } catch (e) {
@@ -59,6 +77,8 @@ export function Home(props: { onOpenSettings: () => void }) {
         <button type="button" onClick={props.onOpenSettings}>设置</button>
       </header>
       {error && <p className="error">{error}</p>}
+      {busy && <p>{busy}</p>}
+      {notice && <p className="banner warn">{notice}</p>}
       <div className="home-actions">
         {status === 'notStarted' && <button type="button" className="primary big" onClick={() => void go(false)}>开始今天的练习</button>}
         {status === 'inProgress' && <button type="button" className="primary big" onClick={() => void go(false)}>继续今天的练习</button>}

@@ -8,6 +8,7 @@ import { SCHEMA_VERSION } from '../../storage/types'
 import { labelFor } from '../labels'
 import { boot, type LazyAudio } from '../platform'
 import { RuntimeProvider } from '../RuntimeContext'
+import type { SingMic } from '../singMic'
 import { Shell } from '../Shell'
 
 afterEach(() => {
@@ -15,10 +16,13 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+const fakeMic: SingMic = { ensure: async () => {}, start: async () => {}, stop: async () => [] }
+
 function fakeAudio(): LazyAudio {
   return {
     ready: true,
     latencySec: 0,
+    context: null,
     state: 'running',
     currentTime: 0,
     async unlock() {},
@@ -48,12 +52,12 @@ function manualTimer() {
 
 async function setup(profileId = 'p') {
   const repo = new MemoryRepository()
-  await repo.saveProfile({ id: profileId, createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION })
+  await repo.saveProfile({ id: profileId, createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION, singMode: 'self' })
   const audio = fakeAudio()
   const { timer, flush } = manualTimer()
   const r = await boot({ openRepo: async () => repo, audio, timer, now: () => new Date(2026, 9, 13, 9), randomId: () => profileId })
   if (r.kind !== 'ready') throw new Error('boot 失败')
-  render(<RuntimeProvider runtime={r.runtime} audio={audio}><Shell storageWarning={null} /></RuntimeProvider>)
+  render(<RuntimeProvider runtime={r.runtime} audio={audio} mic={fakeMic}><Shell storageWarning={null} /></RuntimeProvider>)
   return { runtime: r.runtime, flush, repo }
 }
 

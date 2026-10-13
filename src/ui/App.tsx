@@ -21,7 +21,7 @@ export function App() {
   if (!result) return <main className="page">加载中…</main>
   if (result.kind === 'corrupt') return <StorageProblem result={result} onRebuilt={setResult} />
   return (
-    <RuntimeProvider runtime={result.runtime} audio={result.audio}>
+    <RuntimeProvider runtime={result.runtime} audio={result.audio} mic={result.mic}>
       <Shell storageWarning={result.storageWarning} />
     </RuntimeProvider>
   )

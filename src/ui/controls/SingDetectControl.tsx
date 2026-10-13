@@ -5,6 +5,8 @@ import { PitchControl } from './PitchControl'
 
 /** stop() 超过这个秒数仍未落定：本题改为自评 */
 export const STOP_WATCHDOG_SEC = 3
+/** start() 超过这个秒数仍未落定（含打开与校准 CALIBRATE_SEC = 3，再加 5 秒余量）：本题改为自评 */
+export const START_WATCHDOG_SEC = 8
 
 export function SingDetectControl(props: {
   targetsText: string | null
@@ -28,7 +30,7 @@ export function SingDetectControl(props: {
   const alive = useRef(true)
   /** 当前这一轮的 start 落定 promise（resolve 成功与否） */
   const startP = useRef<Promise<boolean> | null>(null)
-  /** 上一轮 cleanup 发出的 stop 的落定；下一轮 start 要等它，免得它停掉新一轮 */
+  /** 上一轮 cleanup 的 stop 已发出（不等其落定）；下一轮 start 要等它，免得 stop 排在新一轮 start 之后 */
   const stopGate = useRef<Promise<void>>(Promise.resolve())
   const cancelTimer = useRef<() => void>(() => {})
 
@@ -82,6 +84,8 @@ export function SingDetectControl(props: {
     // 以下状态属于“这一次 effect 运行”：StrictMode 的上一轮不能影响下一轮
     let cancelled = false
     let count = 0
+    let startSettled = false
+    let timedOut = false
     setHeard(0)
     setReady(false)
     const p = stopGate.current.then(() =>
@@ -93,8 +97,19 @@ export function SingDetectControl(props: {
       }),
     ).then(() => true, () => false)
     startP.current = p
+    const cancelStartWatchdog = schedule(START_WATCHDOG_SEC, () => {
+      if (cancelled || startSettled) return
+      timedOut = true
+      fail.current()
+    })
     void p.then((ok) => {
-      if (cancelled) return
+      startSettled = true
+      cancelStartWatchdog()
+      // 迟到的 start：看门狗已让本题改为自评，把刚开始的收音停掉，结果忽略
+      if (timedOut && ok) void mic.stop().catch(() => {})
+    })
+    void p.then((ok) => {
+      if (cancelled || timedOut) return
       if (!ok) { fail.current(); return }
       setReady(true)
       // 超时从真正开始收音起算
@@ -102,11 +117,12 @@ export function SingDetectControl(props: {
     })
     return () => {
       cancelled = true
+      cancelStartWatchdog()
       cancelTimer.current()
       cancelTimer.current = () => {}
       if (!finished.current) {
-        // start 落定之后才可 stop；失败则无需 stop
-        stopGate.current = p.then((ok) => (ok ? mic.stop().then(() => {}, () => {}) : undefined))
+        // start 落定之后才可 stop；失败则无需 stop；看门狗超时的那一轮已由迟到处理停过。只等 stop 发出，不等其落定
+        stopGate.current = p.then((ok) => { if (ok && !timedOut) void mic.stop().catch(() => {}) })
       }
     }
   }, [enabled, mic, schedule, targetCount])

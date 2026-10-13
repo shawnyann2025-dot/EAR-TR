@@ -10,15 +10,19 @@ import { labelFor } from '../labels'
 import { boot, type LazyAudio } from '../platform'
 import { probeSeed, probeSpec } from '../placementProbe'
 import { RuntimeProvider } from '../RuntimeContext'
+import type { SingMic } from '../singMic'
 import { Shell } from '../Shell'
 
 afterEach(cleanup)
 const c = buildCurriculum()
 
+const fakeMic: SingMic = { ensure: async () => {}, start: async () => {}, stop: async () => [] }
+
 function fakeAudio(): LazyAudio {
   return {
     ready: true,
     latencySec: 0,
+    context: null,
     state: 'running',
     currentTime: 0,
     async unlock() {},
@@ -33,7 +37,7 @@ async function setup(audioOverride?: LazyAudio) {
   const audio = audioOverride ?? fakeAudio()
   const r = await boot({ openRepo: async () => repo, audio, timer: { after: () => () => {} }, now: () => new Date(2026, 9, 13, 9), randomId: () => 'p-new' })
   if (r.kind !== 'ready') throw new Error('boot 失败')
-  render(<RuntimeProvider runtime={r.runtime} audio={audio}><Shell storageWarning={null} /></RuntimeProvider>)
+  render(<RuntimeProvider runtime={r.runtime} audio={audio} mic={fakeMic}><Shell storageWarning={null} /></RuntimeProvider>)
   return { repo }
 }
 
