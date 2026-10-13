@@ -181,3 +181,34 @@ describe('grade：打拍相位（maxShiftSec）', () => {
     expect(grade(phased, { kind: 'tap', tapsSec: [-0.51, 0.49, 1.49, 2.49] }).correct).toBe(false)
   })
 })
+
+import { buildCurriculum as buildCurriculumForPitch } from '../curriculum/curriculum'
+import { generate as generateForPitch } from './generate'
+
+describe('grade：唱模态检测分支（P-4 spec §3.4）', () => {
+  const c = buildCurriculumForPitch()
+  const ex = generateForPitch(
+    { kpId: 'degree:major:mi', modality: 'sing', track: 'T', contextLevel: 1, variationLevel: 1, difficultyStep: 2, seed: 5, segment: 'focus' },
+    c,
+  )
+  if (ex.answer.kind !== 'pitch') throw new Error('应为唱题')
+  const targets = ex.answer.targets
+
+  it('唱准（含低一个八度）判对，detail 带逐音结果', () => {
+    const r = grade(ex, { kind: 'pitch', sungHz: targets.map((t) => t.freqHz / 2) })
+    expect(r.correct).toBe(true)
+    expect(r.detail).toEqual({ kind: 'pitch', perTarget: targets.map(() => true), centsOff: targets.map(() => expect.closeTo(0, 6)) })
+  })
+
+  it('有一个音唱偏半音判错', () => {
+    const sung = targets.map((t, i) => (i === 0 ? t.freqHz * Math.pow(2, 1 / 12) : t.freqHz))
+    const r = grade(ex, { kind: 'pitch', sungHz: sung })
+    expect(r.correct).toBe(false)
+    if (r.detail.kind !== 'pitch') throw new Error()
+    expect(r.detail.perTarget![0]).toBe(false)
+  })
+
+  it('自评分支行为不变', () => {
+    expect(grade(ex, { kind: 'pitch', selfAssessedCorrect: true })).toEqual({ correct: true, detail: { kind: 'pitch' } })
+  })
+})
