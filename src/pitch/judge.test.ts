@@ -59,3 +59,11 @@ describe('judgeSung（P-4 spec D2）', () => {
     expect(r).toEqual({ correct: false, perTarget: [false, false, false], centsOff: [null, null, null] })
   })
 })
+
+describe('judgeSung：坏输入', () => {
+  it('非有限或非正的频率按没唱到处理（centsOff 为 null）', () => {
+    const r = judgeSung([target(60), target(64)], [Number.NaN, 0])
+    expect(r).toEqual({ correct: false, perTarget: [false, false], centsOff: [null, null] })
+    expect(judgeSung([target(60)], [Number.POSITIVE_INFINITY]).centsOff).toEqual([null])
+  })
+})

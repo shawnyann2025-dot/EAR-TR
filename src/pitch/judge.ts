@@ -21,7 +21,9 @@ export interface SungJudgement {
  * 每个都在容差内（八度折叠后）才算对，全对才 correct。
  */
 export function judgeSung(targets: readonly PitchTarget[], sungHz: readonly number[]): SungJudgement {
-  const centsOff = targets.map((t, i) => (i < sungHz.length ? foldCents(centsBetween(sungHz[i], t.freqHz)) : null))
+  // 非有限或非正的频率（坏输入）按「没唱到」处理
+  const usable = (hz: number | undefined): hz is number => hz !== undefined && Number.isFinite(hz) && hz > 0
+  const centsOff = targets.map((t, i) => (usable(sungHz[i]) ? foldCents(centsBetween(sungHz[i], t.freqHz)) : null))
   const perTarget = centsOff.map((c, i) => c !== null && Math.abs(c) <= targets[i].centsTolerance)
   return { correct: targets.length > 0 && perTarget.every(Boolean), perTarget, centsOff }
 }
