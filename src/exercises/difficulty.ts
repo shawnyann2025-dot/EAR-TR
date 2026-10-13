@@ -22,16 +22,8 @@ export const DIFFICULTY_TABLE = {
   tapBars: [1, 1, 1, 2, 2, 2],
 } as const satisfies Record<string, readonly number[]>
 
-export interface DifficultyParams {
-  recognizeOptionCount: number
-  recognizeNoteSec: number
-  notateMelodyLength: number
-  notateChordCount: number
-  notateRhythmBars: number
-  singTargetCount: number
-  tapToleranceSec: number
-  tapBars: number
-}
+/** 由表推导，去掉 as const 带来的 readonly——加表行时类型自动跟上（P-2b spec §14） */
+export type DifficultyParams = { -readonly [K in keyof typeof DIFFICULTY_TABLE]: number }
 
 export const MIN_DIFFICULTY_STEP = 0
 export const MAX_DIFFICULTY_STEP = 5

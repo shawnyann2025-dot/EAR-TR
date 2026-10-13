@@ -56,9 +56,9 @@ export interface FeedbackPlan {
 export type PromptId =
   | 'which-degree' | 'sing-degrees' | 'notate-melody'
   | 'did-it-modulate' | 'sing-new-tonic' | 'new-tonic-degree'
-  | 'which-quality' | 'which-chord' | 'sing-arpeggio' | 'notate-chords'
+  | 'which-quality' | 'which-chord' | 'sing-arpeggio' | 'notate-chords' | 'notate-qualities'
   | 'which-progression' | 'sing-bassline' | 'notate-progression'
-  | 'which-inversion' | 'which-bass-contour' | 'notate-bassline'
+  | 'which-inversion' | 'which-bass-contour' | 'notate-bassline' | 'notate-inversions'
   | 'which-pattern' | 'tap-pattern' | 'notate-patterns'
   | 'which-meter' | 'tap-downbeats' | 'which-onset-is-beat-one'
   | 'which-pickup' | 'which-meter-sequence' | 'notate-meters'

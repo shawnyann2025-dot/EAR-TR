@@ -8,6 +8,7 @@ import {
   PLAN_MIDI_MAX,
   PLAN_MIDI_MIN,
   foldToPlanRange,
+  octaveOffsetToFit,
   shiftPlan,
   wrapWithTonalContext,
 } from './context'
@@ -79,5 +80,33 @@ describe('foldToPlanRange', () => {
     expect([PLAN_MIDI_MIN, PLAN_MIDI_MAX]).toEqual([36, 96])
     const folded = foldToPlanRange(notesToPlan([{ midi: 20, atSec: 0, durSec: 1 }], 'piano'))
     expect(freqToMidi(folded.events[0].freqHz)).toBeCloseTo(44, 9)
+  })
+})
+
+describe('octaveOffsetToFit（整题统一移八度，P-2b spec §14）', () => {
+  it('已在区间内：不移', () => {
+    expect(octaveOffsetToFit([40, 60, 90])).toBe(0)
+  })
+
+  it('太低：上移最少的整八度', () => {
+    expect(octaveOffsetToFit([25, 50, 70])).toBe(12)
+    expect(octaveOffsetToFit([13, 20])).toBe(24)
+  })
+
+  it('太高：下移最少的整八度', () => {
+    expect(octaveOffsetToFit([60, 100])).toBe(-12)
+  })
+
+  it('边界本身合法', () => {
+    expect(octaveOffsetToFit([36, 96])).toBe(0)
+  })
+
+  it('空数组返回 0', () => {
+    expect(octaveOffsetToFit([])).toBe(0)
+  })
+
+  it('无整八度解时抛错', () => {
+    expect(() => octaveOffsetToFit([30, 95])).toThrow(/30/)
+    expect(() => octaveOffsetToFit([35, 90])).toThrow(/35/)
   })
 })
