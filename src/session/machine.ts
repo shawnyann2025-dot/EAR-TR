@@ -229,3 +229,22 @@ export function reduce(state: SessionState, event: SessionEvent, ctx: ReduceCont
       return finish(state, ctx, state.phase === 'presenting' || state.phase === 'answering' ? [{ type: 'stopAudio' }] : [], false)
   }
 }
+
+/** 重练换新 seed：同一规格、不同题面 */
+export const DRILL_SEED_SALT = 0x9e3779b9
+
+/**
+ * 重练刚才错的这组（主 spec §6.5）：不写作答、不写掌握度、不动阶梯，只做即时巩固。
+ * 计划由本场错题的实时规格组成；没有错题时返回 null。
+ */
+export function createDrill(from: SessionState): SessionState | null {
+  if (from.wrongThisSession.length === 0) return null
+  const items = from.wrongThisSession.map((spec) => ({ ...spec, seed: (spec.seed ^ DRILL_SEED_SALT) >>> 0 }))
+  return createSession({
+    mode: 'drill',
+    day: from.day,
+    sessionNo: from.sessionNo,
+    phaseId: from.phaseId,
+    plan: { day: from.day, seed: from.plan.seed, phaseId: from.phaseId, items },
+  })
+}
