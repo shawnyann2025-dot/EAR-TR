@@ -47,6 +47,14 @@ export function Practice() {
   const [lastResponse, setLastResponse] = useState<Response | null>(null)
   const [error, setError] = useState<string | null>(null)
   const answeringSince = useRef(0)
+  // 错误只在出错的那道题上显示：换题时清掉本地错误，并记下当时的 runtime 错误作为基线
+  const itemKey = cur ? `${session.day}:${session.sessionNo}:${cur.planIndex}` : ''
+  const lastErrorAtItemStart = useRef(snap.lastError)
+  useEffect(() => {
+    lastErrorAtItemStart.current = snap.lastError
+    setError(null)
+  }, [itemKey])
+  const runtimeError = snap.lastError !== lastErrorAtItemStart.current ? snap.lastError : null
   const phaseRef = useRef(session.phase)
   phaseRef.current = session.phase
   const endEarly = () => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }
@@ -137,7 +145,7 @@ export function Practice() {
         <span>第 {cur.planIndex + 1} / {total} 题</span>
         <EndSessionButton onEnd={endEarly} />
       </header>
-      {(snap.lastError || error) && <p className="error small">{error ?? snap.lastError}</p>}
+      {(error || runtimeError) && <p className="error small">{error ?? runtimeError}</p>}
       <section className="prompt">
         <p className="prompt-text">{PROMPT_TEXT[ex.prompt]}</p>
         {ex.format.kind !== 'tap' && (
