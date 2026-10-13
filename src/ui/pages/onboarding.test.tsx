@@ -48,6 +48,7 @@ describe('首次使用', () => {
     expect(screen.getByText(/耳机/)).toBeTruthy()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '跳过，从头开始' })) })
     await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始练习' })) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '跳过，以后再测' })) })
     expect((await repo.loadProfile())!.placement).toEqual({ done: true, startPhase: 'P1' })
     expect(await screen.findByRole('button', { name: '开始今天的练习' })).toBeTruthy()
   })
@@ -83,6 +84,7 @@ describe('首次使用', () => {
     }
     expect(await screen.findByText(/从 P2/)).toBeTruthy()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始练习' })) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '跳过，以后再测' })) })
     const p = (await repo.loadProfile())!
     expect(p.phaseId).toBe('P2')
     expect(p.placement).toEqual({ done: true, startPhase: 'P2' })

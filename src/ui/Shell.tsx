@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SessionState } from '../session/types'
 import { Home } from './pages/Home'
 import { Onboarding } from './pages/Onboarding'
+import { RangeTest } from './pages/RangeTest'
 import { Practice } from './pages/Practice'
 import { Settings } from './pages/Settings'
 import { Summary } from './pages/Summary'
@@ -30,6 +31,7 @@ export function Shell(props: { storageWarning: string | null }) {
   let page
   if (!snap.profile) page = bootError ? <main className="page"><p className="error">启动失败：{bootError}</p></main> : <main className="page">加载中…</main>
   else if (!snap.profile.placement.done) page = <Onboarding />
+  else if (snap.profile.vocalRange === undefined) page = <RangeTest />
   else if (settings) page = <Settings onBack={() => setSettings(false)} />
   else if (s && s.phase !== 'done') page = <Practice />
   else if (s && s.phase === 'done' && dismissed !== s) page = <Summary onHome={() => setDismissed(s)} />

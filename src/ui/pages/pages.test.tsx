@@ -52,7 +52,7 @@ function manualTimer() {
 
 async function setup(profileId = 'p') {
   const repo = new MemoryRepository()
-  await repo.saveProfile({ id: profileId, createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION, singMode: 'self' })
+  await repo.saveProfile({ id: profileId, createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION, singMode: 'self', vocalRange: null })
   const audio = fakeAudio()
   const { timer, flush } = manualTimer()
   const r = await boot({ openRepo: async () => repo, audio, timer, now: () => new Date(2026, 9, 13, 9), randomId: () => profileId })

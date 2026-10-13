@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { DisplayScheme } from '../../music/display'
 import { localDateString } from '../../session/time'
 import { downloadText } from '../download'
+import { midiName, RangeTest } from './RangeTest'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
 const SCHEMES: { id: DisplayScheme; name: string }[] = [
@@ -14,6 +15,7 @@ export function Settings(props: { onBack: () => void }) {
   const { runtime } = useRuntime()
   const snap = useSnapshot()
   const [msg, setMsg] = useState<string | null>(null)
+  const [retest, setRetest] = useState(false)
   const scheme = snap.profile?.displayScheme ?? 'solfege'
   const today = () => localDateString(new Date())
 
@@ -34,6 +36,8 @@ export function Settings(props: { onBack: () => void }) {
       setMsg(`导入失败：${e instanceof Error ? e.message : String(e)}`)
     }
   }
+
+  if (retest) return <RangeTest onDone={() => setRetest(false)} />
 
   return (
     <main className="page settings">
@@ -64,6 +68,10 @@ export function Settings(props: { onBack: () => void }) {
       {snap.profile?.micFallbackReason && (
         <p className="small">{snap.profile.micFallbackReason === 'denied' ? '之前没有麦克风权限，已改为自评。允许权限后可切回音高检测。' : '此浏览器不支持收音，已改为自评。'}</p>
       )}
+      <section>
+        <p>音域：{snap.profile?.vocalRange ? `${midiName(snap.profile.vocalRange.lowMidi)} – ${midiName(snap.profile.vocalRange.highMidi)}` : '未设置'}</p>
+        <button type="button" onClick={() => setRetest(true)}>重新测定</button>
+      </section>
       <section>
         <button type="button" onClick={() => void guard(async () => downloadText(`ear-tr-备份-${today()}.json`, await runtime.exportBundle()))}>导出备份</button>
         <label className="file-btn">
