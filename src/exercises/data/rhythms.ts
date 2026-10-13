@@ -74,6 +74,8 @@ export interface PatternDef {
   id: string
   ownerKpId: KnowledgePointId
   bars: 1 | 2
+  /** 对比用音型——只出现在选项与听写字母表里，永远不被抽作目标（它不体现所属知识点） */
+  targetable?: false
   notes: readonly PatternNote[]
 }
 
@@ -98,12 +100,15 @@ export const PATTERNS: readonly PatternDef[] = [
   { id: 'q-q-trip-q', ownerKpId: R('triplet'), bars: 1, notes: [n(0, 1), n(1, 1), n(2, T), n(2 + T, T), n(2 + 2 * T, T), n(3, 1)] },
   // 第一小节第四拍后半起音，连线延续到第二小节第一拍——第二小节第一拍没有起音
   { id: 'q-q-q-e~q-q-q', ownerKpId: R('tie-across-bar'), bars: 2, notes: [n(0, 1), n(1, 1), n(2, 1), n(3.5, 1.5), n(5, 1), n(6, 1), n(7, 1)] },
+  // 与连线音型只差第二小节第一拍重新起音——听辨两小节题时，靠的是听出连线，而不是看长度
+  { id: 'q-q-q-e|q-q-q-q', ownerKpId: R('tie-across-bar'), bars: 2, targetable: false, notes: [n(0, 1), n(1, 1), n(2, 1), n(3.5, 0.5), n(4, 1), n(5, 1), n(6, 1), n(7, 1)] },
   { id: 's-e-s-q-q-q', ownerKpId: R('synco-16'), bars: 1, notes: [n(0, 0.25), n(0.25, 0.5), n(0.75, 0.25), n(1, 1), n(2, 1), n(3, 1)] },
   { id: 'q-s-e-s-q-q', ownerKpId: R('synco-16'), bars: 1, notes: [n(0, 1), n(1, 0.25), n(1.25, 0.5), n(1.75, 0.25), n(2, 1), n(3, 1)] },
 ]
 
+/** 返回能作为该知识点目标抽取的音型（排除对比用音型）。 */
 export function patternsOf(kpId: KnowledgePointId): PatternDef[] {
-  return PATTERNS.filter((p) => p.ownerKpId === kpId)
+  return PATTERNS.filter((p) => p.ownerKpId === kpId && p.targetable !== false)
 }
 
 export function patternById(id: string): PatternDef {

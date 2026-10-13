@@ -69,11 +69,26 @@ describe('音型库', () => {
     }
   })
 
-  it('只有跨小节连线是两小节，且第二小节第一拍没有起音（被连线吃掉）', () => {
+  it('两小节音型恰好两个，都属于跨小节连线；可作目标的没有第二小节第一拍起音，对比用的有', () => {
     const two = PATTERNS.filter((p) => p.bars === 2)
-    expect(two.map((p) => p.ownerKpId)).toEqual(['rhythm:tie-across-bar'])
-    expect(two[0].notes.some((n) => Math.abs(n.onset - 4) < 1e-9)).toBe(false)
-    expect(two[0].notes.some((n) => n.onset < 4 && n.onset + n.dur > 4)).toBe(true)
+    expect(two).toHaveLength(2)
+    expect(two.every((p) => p.ownerKpId === 'rhythm:tie-across-bar')).toBe(true)
+    const target = two.filter((p) => p.targetable !== false)
+    const contrast = two.filter((p) => p.targetable === false)
+    expect(target).toHaveLength(1)
+    expect(contrast).toHaveLength(1)
+    expect(target[0].notes.some((n) => Math.abs(n.onset - 4) < 1e-9)).toBe(false)
+    expect(target[0].notes.some((n) => n.onset < 4 && n.onset + n.dur > 4)).toBe(true)
+    expect(contrast[0].notes.some((n) => Math.abs(n.onset - 4) < 1e-9)).toBe(true)
+    expect(patternsOf('rhythm:tie-across-bar')).toEqual(target)
+  })
+
+  it('每个对比用音型所属的知识点，至少还拥有一个可作目标的音型', () => {
+    for (const p of PATTERNS.filter((x) => x.targetable === false)) {
+      expect(
+        PATTERNS.some((q) => q.ownerKpId === p.ownerKpId && q.targetable !== false),
+      ).toBe(true)
+    }
   })
 
   it('patternById 找不到抛错', () => {
