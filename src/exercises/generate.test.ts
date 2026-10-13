@@ -9,6 +9,7 @@ import type { ExerciseSpec } from '../scheduling/exerciseSpec'
 import { PLAN_MIDI_MAX, PLAN_MIDI_MIN } from './context'
 import { CHORD_ENTRIES } from './data/chords'
 import { DEGREE_ENTRIES } from './data/degrees'
+import { RHYTHM_ENTRIES } from './data/rhythms'
 import { CLICK_OCTAVE, answerAsResponse, generate, generateWith, grade, lookupGenerator } from './generate'
 import { CLICK_GAIN_ACCENT } from './metronome'
 import type { ContentResult, Exercise, GeneratorEntry } from './types'
@@ -30,13 +31,14 @@ function spec(overrides: Partial<ExerciseSpec>): ExerciseSpec {
   }
 }
 
-const TH_ROWS: { kpId: string; track: 'T' | 'H' }[] = [
+const TH_ROWS: { kpId: string; track: 'T' | 'H' | 'R' }[] = [
   ...DEGREE_ENTRIES.map((e) => ({ kpId: e.kpId, track: 'T' as const })),
   ...CHORD_ENTRIES.map((e) => ({ kpId: e.kpId, track: 'H' as const })),
+  ...RHYTHM_ENTRIES.map((e) => ({ kpId: e.kpId, track: 'R' as const })),
 ]
 const pickTH = (rng: { pick<T>(xs: readonly T[]): T }) => rng.pick(TH_ROWS)
 
-/** 覆盖全部 T/H 轨知识点 × 模态 × 语境 × 变异 × 档位的随机规格 */
+/** 覆盖全部 T/H/R 轨知识点 × 模态 × 语境 × 变异 × 档位的随机规格 */
 function randomSpecs(n: number): ExerciseSpec[] {
   const rng = makeRng(20261013)
   return Array.from({ length: n }, () =>
@@ -62,10 +64,15 @@ describe('lookupGenerator', () => {
     )
   })
 
-  it('每个 H 轨知识点都有生成器；R 轨在 P-2b-R 之前尚无生成器', () => {
-    for (const e of CHORD_ENTRIES) expect(lookupGenerator(e.kpId)).toBeDefined()
+  it('每个 H/R 轨知识点都有生成器；T/H 用调性语境，R 用节拍器语境', () => {
+    for (const e of CHORD_ENTRIES) expect(lookupGenerator(e.kpId)?.context).toBe('tonal')
     expect(lookupGenerator('chord:i')?.mode).toBe('minor')
-    expect(lookupGenerator('rhythm:quarter')).toBeUndefined()
+    for (const e of RHYTHM_ENTRIES) {
+      const g = lookupGenerator(e.kpId)
+      expect(g?.context).toBe('metronome')
+      expect(g?.mode).toBe('major')
+    }
+    expect(lookupGenerator('degree:major:do')?.context).toBe('tonal')
   })
 })
 
@@ -93,7 +100,7 @@ describe('generate：管线', () => {
   })
 
   it('没有生成器的知识点抛错，消息含定位信息', () => {
-    expect(() => generate(spec({ kpId: 'rhythm:quarter', track: 'R' }), c)).toThrow(/rhythm:quarter@recognize/)
+    expect(() => generate(spec({ kpId: 'rhythm:nope', track: 'R' }), c)).toThrow(/rhythm:nope@recognize/)
   })
 })
 
@@ -113,6 +120,14 @@ describe('generate：快照（固定 seed）', () => {
     ['转位·听辨', { kpId: 'chord:inv-second', track: 'H', modality: 'recognize', contextLevel: 1, variationLevel: 3, difficultyStep: 2, seed: 206 }],
     ['低音线·唱', { kpId: 'chord:bassline', track: 'H', modality: 'sing', contextLevel: 2, variationLevel: 6, difficultyStep: 4, seed: 207 }],
     ['低音线·听写', { kpId: 'chord:bassline', track: 'H', modality: 'notate', contextLevel: 4, variationLevel: 1, seed: 208 }],
+    ['音型·听辨', { kpId: 'rhythm:synco-8', track: 'R', modality: 'recognize', contextLevel: 1, variationLevel: 4, difficultyStep: 3, seed: 301 }],
+    ['音型·打拍', { kpId: 'rhythm:tie-across-bar', track: 'R', modality: 'sing', contextLevel: 2, variationLevel: 5, difficultyStep: 4, seed: 302 }],
+    ['音型·听写', { kpId: 'rhythm:triplet', track: 'R', modality: 'notate', contextLevel: 0, variationLevel: 2, difficultyStep: 2, seed: 303 }],
+    ['拍号·听辨', { kpId: 'rhythm:meter-6-8', track: 'R', modality: 'recognize', contextLevel: 2, variationLevel: 3, difficultyStep: 5, seed: 304 }],
+    ['拍号·听写', { kpId: 'rhythm:meter-3-4', track: 'R', modality: 'notate', contextLevel: 3, variationLevel: 1, difficultyStep: 3, seed: 305 }],
+    ['找 beat 1·打拍', { kpId: 'rhythm:beat-one', track: 'R', modality: 'sing', contextLevel: 1, variationLevel: 0, difficultyStep: 4, seed: 306 }],
+    ['弱起·听辨', { kpId: 'rhythm:anacrusis', track: 'R', modality: 'recognize', contextLevel: 4, variationLevel: 6, difficultyStep: 5, seed: 307 }],
+    ['混合拍子·听写', { kpId: 'rhythm:mixed-meter', track: 'R', modality: 'notate', contextLevel: 2, variationLevel: 6, seed: 308 }],
   ]
   for (const [name, o] of cases) {
     it(name, () => {
@@ -202,6 +217,28 @@ describe('generate：属性（P-2b spec §11 第 3 条）', () => {
 
   it('随机规格里确实有 H 轨', () => {
     expect(specs.filter((x) => x.track === 'H').length).toBeGreaterThan(100)
+  })
+
+  it('随机规格里确实有 R 轨', () => {
+    expect(specs.filter((x) => x.track === 'R').length).toBeGreaterThan(100)
+  })
+
+  it('R 轨：打拍题的起音都落在内容时长之内，且严格递增', () => {
+    for (const s of specs.filter((x) => x.track === 'R' && x.modality === 'sing')) {
+      const ex = generate(s, c)
+      if (ex.format.kind !== 'tap') throw new Error(`R 轨唱模态应为打拍：${s.kpId}`)
+      const onsets = ex.format.onsetsSec
+      expect(onsets.length).toBeGreaterThan(0)
+      for (let i = 1; i < onsets.length; i++) expect(onsets[i]).toBeGreaterThan(onsets[i - 1])
+    }
+  })
+
+  it('R 轨：内容音高都是主音，点击都是主音上方一个八度（折叠前）', () => {
+    for (const s of specs.filter((x) => x.track === 'R').slice(0, 150)) {
+      const ex = generate(s, c)
+      const pcs = new Set(ex.plan.events.map((e) => ((Math.round(freqToMidi(e.freqHz)) % 12) + 12) % 12))
+      expect(pcs.size).toBe(1)
+    }
   })
 })
 

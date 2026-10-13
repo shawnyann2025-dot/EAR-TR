@@ -7,11 +7,15 @@ import { describeSpec, type ExerciseSpec } from '../scheduling/exerciseSpec'
 import { wrapWithTonalContext } from './context'
 import { chordEntry, type ChordFamily } from './data/chords'
 import { degreeEntry } from './data/degrees'
+import { rhythmEntry, type RhythmFamily } from './data/rhythms'
 import { FEEDBACK_ANCHOR_SEC, buildFeedback } from './feedback'
 import { FUNCTIONAL_GENERATORS, QUALITY_GENERATORS } from './generators/chord'
 import { DEGREE_GENERATORS } from './generators/degree'
 import { BASSLINE_GENERATORS, INVERSION_GENERATORS } from './generators/inversion'
 import { MODULATION_GENERATORS } from './generators/modulation'
+import { ANACRUSIS_GENERATORS, BEAT_ONE_GENERATORS } from './generators/pickup'
+import { METER_GENERATORS, MIXED_METER_GENERATORS } from './generators/meter'
+import { PATTERN_GENERATORS } from './generators/pattern'
 import { PROGRESSION_GENERATORS } from './generators/progression'
 import { metronomeBarNotes, wrapWithMetronome } from './metronome'
 import type { Exercise, Generator, GeneratorEntry } from './types'
@@ -28,10 +32,17 @@ const CHORD_GENERATORS: Record<ChordFamily, Record<Modality, Generator>> = {
   bassline: BASSLINE_GENERATORS,
 }
 
+const RHYTHM_GENERATORS: Record<RhythmFamily, Record<Modality, Generator>> = {
+  pattern: PATTERN_GENERATORS,
+  meter: METER_GENERATORS,
+  'beat-one': BEAT_ONE_GENERATORS,
+  anacrusis: ANACRUSIS_GENERATORS,
+  'mixed-meter': MIXED_METER_GENERATORS,
+}
+
 /**
  * 生成器注册表：知识点 → (调式, 三模态生成器)。
  * 由数据表的行决定分支，不由 kind 字段直接决定（P-2b spec §4）。
- * P-2b-R 在此追加 R 轨的查找。
  */
 export function lookupGenerator(kpId: KnowledgePointId): GeneratorEntry | undefined {
   const degree = degreeEntry(kpId)
@@ -45,6 +56,11 @@ export function lookupGenerator(kpId: KnowledgePointId): GeneratorEntry | undefi
   const chord = chordEntry(kpId)
   if (chord) {
     return { mode: chord.mode, context: 'tonal', byModality: CHORD_GENERATORS[chord.family] }
+  }
+  const rhythm = rhythmEntry(kpId)
+  if (rhythm) {
+    // 节奏不需要调中心；调式取默认（P-2b spec §14），音高只用主音
+    return { mode: 'major', context: 'metronome', byModality: RHYTHM_GENERATORS[rhythm.family] }
   }
   return undefined
 }
