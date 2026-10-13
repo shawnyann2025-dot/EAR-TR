@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildCurriculum } from '../../curriculum/curriculum'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
@@ -11,15 +11,32 @@ export function Home(props: { onOpenSettings: () => void }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    void runtime.todayStatus().then((s) => {
-      if (alive) setStatus(s)
-    })
-    return () => {
-      alive = false
+  const aliveRef = useRef(true)
+  const refresh = useCallback(async () => {
+    try {
+      const s = await runtime.todayStatus()
+      if (aliveRef.current) setStatus(s)
+    } catch (e) {
+      if (aliveRef.current) setError(e instanceof Error ? e.message : String(e))
     }
-  }, [runtime, snap.session])
+  }, [runtime])
+
+  useEffect(() => {
+    aliveRef.current = true
+    void refresh()
+    return () => {
+      aliveRef.current = false
+    }
+  }, [refresh, snap.session])
+
+  // 页面隔夜不关：回到前台时重新取今日状态
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refresh])
 
   const phaseId = snap.profile?.phaseId
   const phaseLabel = curriculum.phases.find((p) => p.id === phaseId)?.label ?? ''
@@ -32,6 +49,7 @@ export function Home(props: { onOpenSettings: () => void }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
+    await refresh()
   }
 
   return (

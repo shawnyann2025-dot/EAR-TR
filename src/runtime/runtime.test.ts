@@ -117,8 +117,9 @@ describe('createRuntime', () => {
     const rt = createRuntime(d)
     await rt.startToday()
     const first = rt.getSnapshot().session!.current!.exercise
+    const stoppedBefore = d.stoppedCount()
     await rt.dispatch({ type: 'interrupted' })
-    expect(d.stoppedCount()).toBe(1)
+    expect(d.stoppedCount()).toBe(stoppedBefore + 1)
     expect(rt.getSnapshot().session?.phase).toBe('idle')
     await rt.dispatch({ type: 'start' })
     expect(rt.getSnapshot().session?.current?.exercise).toEqual(first)
@@ -431,6 +432,22 @@ describe('Profile 与导入导出', () => {
     expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
     expect(rt.getSnapshot().session).toBe(session)
     expect(rt.getSnapshot().lastBackup).toBeNull()
+  })
+})
+
+describe('播放前先停', () => {
+  it('每次 play 之前都调用 stopAll', async () => {
+    const d = deps(new MemoryRepository())
+    const order: string[] = []
+    const play = d.audio.play
+    const stop = d.audio.stopAll
+    d.audio.play = (plan, opts) => { order.push('play'); return play(plan, opts) }
+    d.audio.stopAll = () => { order.push('stop'); stop() }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    await playThrough(rt, d.flush, 3)
+    expect(order.filter((x) => x === 'play').length).toBeGreaterThanOrEqual(3)
+    order.forEach((x, i) => { if (x === 'play') expect(order[i - 1]).toBe('stop') })
   })
 })
 

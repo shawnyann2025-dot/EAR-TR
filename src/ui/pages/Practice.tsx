@@ -62,6 +62,7 @@ export function Practice() {
       <main className="page practice">
         <div className="overlay">
           <p>练习暂停了。</p>
+          <button type="button" onClick={() => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }}>结束本场</button>
           {error && <p className="error">{error}</p>}
           <button
             type="button"
@@ -91,7 +92,7 @@ export function Practice() {
     <main className="page practice">
       <header className="topbar">
         <span>第 {cur.planIndex + 1} / {total} 题</span>
-        <button type="button" onClick={() => void runtime.dispatch({ type: 'endEarly' })}>结束本场</button>
+        <button type="button" onClick={() => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }}>结束本场</button>
       </header>
       <section className="prompt">
         <p className="prompt-text">{PROMPT_TEXT[ex.prompt]}</p>

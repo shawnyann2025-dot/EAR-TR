@@ -123,6 +123,8 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         cancelTimer?.()
         // 先清空：play 若抛错，不能残留上一道题的播放信息
         set({ playback: null })
+        // 先停掉上一段（UI 的重听/慢放），免得叠在新题上
+        audio.stopAll()
         const { startSec, endSec } = audio.play(effect.plan, { cutContextAtSec: effect.contentStartSec })
         set({ playback: { startSec, contentStartSec: effect.contentStartSec } })
         cancelTimer = timer.after(Math.max(0, endSec - audio.currentTime), () => {

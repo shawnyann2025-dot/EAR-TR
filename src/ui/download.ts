@@ -7,5 +7,6 @@ export function downloadText(filename: string, text: string): void {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  // 立即 revoke 会让 iOS Safari 下载失败；延后释放
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
 }

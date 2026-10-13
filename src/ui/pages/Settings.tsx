@@ -17,6 +17,14 @@ export function Settings(props: { onBack: () => void }) {
   const scheme = snap.profile?.displayScheme ?? 'solfege'
   const today = () => localDateString(new Date())
 
+  async function guard(fn: () => Promise<unknown>) {
+    try {
+      await fn()
+    } catch (e) {
+      setMsg(`操作失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   async function onImport(file: File | undefined) {
     if (!file) return
     try {
@@ -37,16 +45,20 @@ export function Settings(props: { onBack: () => void }) {
         <legend>显示皮肤</legend>
         {SCHEMES.map((s) => (
           <label key={s.id}>
-            <input type="radio" name="scheme" checked={scheme === s.id} onChange={() => void runtime.updateProfile({ displayScheme: s.id })} />
+            <input type="radio" name="scheme" checked={scheme === s.id} onChange={() => void guard(() => runtime.updateProfile({ displayScheme: s.id }))} />
             {s.name}
           </label>
         ))}
       </fieldset>
       <section>
-        <button type="button" onClick={async () => downloadText(`ear-tr-备份-${today()}.json`, await runtime.exportBundle())}>导出备份</button>
+        <button type="button" onClick={() => void guard(async () => downloadText(`ear-tr-备份-${today()}.json`, await runtime.exportBundle()))}>导出备份</button>
         <label className="file-btn">
           导入备份
-          <input type="file" accept="application/json,.json" onChange={(e) => void onImport(e.target.files?.[0])} />
+          <input type="file" accept="application/json,.json" onChange={(e) => {
+              const input = e.target
+              const file = input.files?.[0]
+              void onImport(file).finally(() => { input.value = '' })
+            }} />
         </label>
         {msg && <p>{msg}</p>}
         {snap.lastBackup && (

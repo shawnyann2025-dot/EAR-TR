@@ -86,7 +86,7 @@ describe('首页 → 练习页', () => {
     expect(screen.getByText(/第 1 \//)).toBeTruthy()
     await advanceToChoice(runtime, flush)
     const ex = runtime.getSnapshot().session!.current!.exercise
-    if (ex.format.kind !== 'choice') throw new Error('首题应为选择题（热身题）；若不是，换 setup 的 profileId')
+    if (ex.format.kind !== 'choice') throw new Error('advanceToChoice 之后应为选择题')
     const name = labelFor(ex.format.options[0].id, { scheme: 'solfege', mode: ex.resolved.key.mode, prompt: ex.prompt })
     expect(screen.getAllByRole('button', { name })[0]).toHaveProperty('disabled', true)
     await flush()

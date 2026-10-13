@@ -12,13 +12,15 @@ export function Shell(props: { storageWarning: string | null }) {
   const [settings, setSettings] = useState(false)
   const [dismissed, setDismissed] = useState<SessionState | null>(null)
 
+  const [bootError, setBootError] = useState<string | null>(null)
+
   useEffect(() => {
-    void runtime.ensureProfile()
+    runtime.ensureProfile().catch((e) => setBootError(e instanceof Error ? e.message : String(e)))
   }, [runtime])
 
   const s = snap.session
   let page
-  if (!snap.profile) page = <main className="page">加载中…</main>
+  if (!snap.profile) page = bootError ? <main className="page"><p className="error">启动失败：{bootError}</p></main> : <main className="page">加载中…</main>
   else if (settings) page = <Settings onBack={() => setSettings(false)} />
   else if (s && s.phase !== 'done') page = <Practice />
   else if (s && s.phase === 'done' && dismissed !== s) page = <Summary onHome={() => setDismissed(s)} />
