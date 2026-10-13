@@ -287,3 +287,19 @@ export async function openIndexedDbRepository(
   }
   return repo
 }
+
+/** 删除整个数据库（损坏后用户确认重建时用）。其他标签页占用时 reject */
+export function deleteIndexedDb(opts: { name?: string; factory?: IDBFactory } = {}): Promise<void> {
+  const factory = opts.factory ?? globalThis.indexedDB
+  const name = opts.name ?? DB_NAME
+  return new Promise((resolve, reject) => {
+    if (!factory) {
+      resolve()
+      return
+    }
+    const r = factory.deleteDatabase(name)
+    r.onsuccess = () => resolve()
+    r.onerror = () => reject(r.error)
+    r.onblocked = () => reject(new Error('另一个标签页正在使用本地数据库，请关闭其他标签页后重试'))
+  })
+}

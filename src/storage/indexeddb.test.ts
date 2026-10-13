@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
 import { repositoryContract } from './contract'
-import { openIndexedDbRepository } from './indexeddb'
+import { deleteIndexedDb, openIndexedDbRepository } from './indexeddb'
 import { masteryKey } from '../curriculum/knowledgePoints'
 import { initialMastery } from '../scheduling/mastery'
 import { SCHEMA_VERSION, StorageCorruptError, StorageUnavailableError } from './types'
@@ -96,5 +96,16 @@ describe('IndexedDB：持久化与损坏', () => {
 
   it('没有 IndexedDB（globalThis.indexedDB 为空）：StorageUnavailableError', async () => {
     await expect(openIndexedDbRepository({ name: 'x' })).rejects.toBeInstanceOf(StorageUnavailableError)
+  })
+})
+
+describe('deleteIndexedDb', () => {
+  it('删库后重新打开是空库', async () => {
+    const env = fresh()
+    const a = await openIndexedDbRepository(env)
+    await a.saveProfile({ id: 'p', createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION })
+    await deleteIndexedDb(env)
+    const b = await openIndexedDbRepository(env)
+    expect(await b.loadProfile()).toBeNull()
   })
 })
