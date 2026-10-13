@@ -15,8 +15,11 @@ export function useWakeLock(active: boolean): void {
     const acquire = () => {
       wl.request('screen').then(
         (s) => {
-          if (alive) sentinel.current = s
-          else void s.release().catch(() => {})
+          if (alive) {
+            const prev = sentinel.current
+            sentinel.current = s
+            if (prev && prev !== s) void prev.release().catch(() => {})
+          } else void s.release().catch(() => {})
         },
         () => {},
       )
