@@ -37,12 +37,13 @@ export function lookupGenerator(kpId: KnowledgePointId): GeneratorEntry | undefi
   if (degree) {
     return {
       mode: degree.mode,
+      context: 'tonal',
       byModality: degree.pool === 'modulation' ? MODULATION_GENERATORS : DEGREE_GENERATORS,
     }
   }
   const chord = chordEntry(kpId)
   if (chord) {
-    return { mode: chord.mode, byModality: CHORD_GENERATORS[chord.family] }
+    return { mode: chord.mode, context: 'tonal', byModality: CHORD_GENERATORS[chord.family] }
   }
   return undefined
 }

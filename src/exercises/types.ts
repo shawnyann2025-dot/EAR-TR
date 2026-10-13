@@ -2,6 +2,7 @@ import type { Curriculum } from '../curriculum/curriculum'
 import type { Modality } from '../curriculum/knowledgePoints'
 import type { Key, Mode, ScaleDegree } from '../music/key'
 import type { NoteSpec, PlaybackPlan, TimbreId } from '../music/playback'
+import type { Meter } from '../music/rhythm'
 import type { Rng } from '../music/rng'
 import type { ExerciseSpec } from '../scheduling/exerciseSpec'
 
@@ -22,7 +23,13 @@ export type AnswerFormat =
   | { kind: 'choice'; options: AnswerOption[] }
   | { kind: 'sequence'; length: number; alphabet: AnswerOption[] }
   | { kind: 'pitch'; targets: PitchTarget[] }
-  | { kind: 'tap'; onsetsSec: number[]; toleranceSec: number }
+  | {
+      kind: 'tap'
+      onsetsSec: number[]
+      toleranceSec: number
+      /** 「打出给定音型」类题：屏幕上要显示的音型 / 弱起 id；边听边打强拍的题不给 */
+      patternIds?: string[]
+    }
 
 export type Answer =
   | { kind: 'choice'; id: string }
@@ -94,6 +101,9 @@ export interface GeneratorInput {
   rng: Rng
 }
 
+/** 节拍器模式：metered 按拍号分组、强拍加重；neutral 不透露拍号与强拍（P-2b-R 裁定 1） */
+export type MetronomeMode = 'metered' | 'neutral'
+
 /** 管线第 2 步的产出。时刻全部相对题目内容起点（0） */
 export interface ContentResult {
   /** 题目里实际播放的内容（唱模态可为空） */
@@ -105,11 +115,15 @@ export interface ContentResult {
   prompt: PromptId
   format: AnswerFormat
   answer: Answer
+  /** 节拍器语境需要的小节结构；只有 context 为 metronome 的生成器才给 */
+  rhythm?: { bars: readonly Meter[]; metronome: MetronomeMode }
 }
 
 export type Generator = (input: GeneratorInput) => ContentResult
 
 export interface GeneratorEntry {
   mode: Mode
+  /** tonal：调性语境（主 spec §6.1）；metronome：节拍器语境（P-2b spec §7.1） */
+  context: 'tonal' | 'metronome'
   byModality: Record<Modality, Generator>
 }
