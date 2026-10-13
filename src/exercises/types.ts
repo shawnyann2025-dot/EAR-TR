@@ -116,7 +116,16 @@ export interface ContentResult {
   format: AnswerFormat
   answer: Answer
   /** 节拍器语境需要的小节结构；只有 context 为 metronome 的生成器才给 */
-  rhythm?: { bars: readonly Meter[]; metronome: MetronomeMode }
+  rhythm?: {
+    bars: readonly Meter[]
+    metronome: MetronomeMode
+    /**
+     * 题目内容的时刻 0 对应小节网格里的第几个感知拍（默认 0）。
+     * 从小节中间开始的内容（找 beat 1、弱起）去掉前面的空拍，让预备拍不落在第一拍上。
+     * 生成器负责把自己的起音与答案一起前移 startPulse 个感知拍。
+     */
+    startPulse?: number
+  }
 }
 
 export type Generator = (input: GeneratorInput) => ContentResult

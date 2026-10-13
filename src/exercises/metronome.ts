@@ -16,6 +16,8 @@ export const METRONOME_L4_COVERAGE = 0.4
  * 少于最短 R 题（两小节 2/4＝4 拍），所以节拍器仍然撤掉。
  */
 export const NEUTRAL_L4_PULSES = 3
+/** 中性 L2 的节拍个数：固定个数、逐拍都响——没有步长，就不会与小节线对齐；比 L4 的 3 个多，保持逐级撤走 */
+export const NEUTRAL_L2_PULSES = 6
 
 /** 一个感知拍含几个记谱单位：x/8 复合拍是附点四分＝3 个八分（FWD-6），其余 1 个 */
 export function unitsPerPulse(meter: Meter): number {
@@ -58,6 +60,8 @@ export interface MetronomeWrapInput {
   /** 题目内容，时刻相对 0 */
   content: PlaybackPlan
   contentDurSec: number
+  /** 内容的时刻 0 对应小节网格里的第几个感知拍（默认 0）；内容从小节中间开始时使用 */
+  startPulse?: number
 }
 
 /**
@@ -81,14 +85,19 @@ export function wrapWithMetronome(input: MetronomeWrapInput): {
       )
   const leadInSec = countIn.length * pulseSec
 
-  const grid = pulseGrid(bars, bpm)
+  const full = pulseGrid(bars, bpm)
+  const start = input.startPulse ?? 0
+  if (!Number.isInteger(start) || start < 0 || start >= full.length) {
+    throw new Error(`startPulse 必须是 [0, ${full.length}) 内的整数：${start}`)
+  }
+  const grid = full.slice(start).map((p) => ({ atSec: p.atSec - start * pulseSec, downbeat: p.downbeat }))
   const kept = grid.filter((p, i) => {
     switch (level) {
       case 0:
       case 1:
         return true
       case 2:
-        return metered ? p.downbeat : i % 2 === 0
+        return metered ? p.downbeat : i < NEUTRAL_L2_PULSES
       case 3:
         return false
       case 4:

@@ -98,6 +98,7 @@ export function generateWith(
       timbreId: resolved.timbreId,
       content: contentPlan,
       contentDurSec: content.durSec,
+      startPulse: content.rhythm.startPulse,
     })
     anchor = metronomeBarNotes(content.rhythm.bars[0], resolved.bpm, clickMidi)
   }

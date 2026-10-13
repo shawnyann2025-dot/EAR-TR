@@ -100,9 +100,35 @@ describe('wrapWithMetronome：neutral（不透露拍号与强拍）', () => {
     expect(wrap(0, 'neutral').contentStartSec).toBe(8)
   })
 
-  it('L2：隔一个感知拍响一次，不跟强拍对齐', () => {
-    const r = wrap(2, 'neutral', [M34, M34], 6)
-    expect(contentClicks(r).map((e) => e.atSec - r.contentStartSec)).toEqual([0, 2, 4])
+  it('L2：内容开头逐拍响固定 6 个，与拍号无关，不跟小节线对齐', () => {
+    for (const bars of [[M24, M24, M24], [M34, M34], [M44, M44]]) {
+      const r = wrap(2, 'neutral', bars, 6)
+      expect(contentClicks(r).map((e) => e.atSec - r.contentStartSec)).toEqual([0, 1, 2, 3, 4, 5])
+    }
+  })
+})
+
+describe('startPulse（从小节中间开始的内容）', () => {
+  const wrapStart = (level: ContextLevel, mode: MetronomeMode, startPulse: number) =>
+    wrapWithMetronome({
+      bars: [M34, M34], bpm: 60, level, mode, clickMidi: CLICK_MIDI, timbreId: 'piano', content, contentDurSec: 5, startPulse,
+    })
+
+  it('neutral L1：内容网格去掉前 startPulse 个拍，其余前移', () => {
+    const r = wrapStart(1, 'neutral', 1)
+    expect(contentClicks(r).map((e) => e.atSec - r.contentStartSec)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('metered L2：只剩第 2 小节的强拍，偏移 2，加重', () => {
+    const r = wrapStart(2, 'metered', 1)
+    expect(contentClicks(r).map((e) => e.atSec - r.contentStartSec)).toEqual([2])
+    expect(contentClicks(r).every((e) => e.gain === CLICK_GAIN_ACCENT)).toBe(true)
+  })
+
+  it('startPulse 越界或非整数时抛错', () => {
+    expect(() => wrapStart(1, 'neutral', 6)).toThrow()
+    expect(() => wrapStart(1, 'neutral', 1.5)).toThrow()
+    expect(() => wrapStart(1, 'neutral', -1)).toThrow()
   })
 })
 
