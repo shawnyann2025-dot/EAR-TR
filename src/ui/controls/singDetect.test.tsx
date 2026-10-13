@@ -14,6 +14,7 @@ function fakeMic(opts: { startFails?: boolean } = {}) {
   const mic: SingMic & { emit(hz: number): void; stops: number } = {
     stops: 0,
     ensure: async () => {},
+    close: () => {},
     start: async (onSeg) => {
       if (opts.startFails) throw new Error('boom')
       cb = onSeg

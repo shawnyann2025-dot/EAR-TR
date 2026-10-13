@@ -7,7 +7,7 @@ import { localDateString } from '../session/time'
 import { deleteIndexedDb, openIndexedDbRepository } from '../storage/indexeddb'
 import { MemoryRepository } from '../storage/memory'
 import { StorageCorruptError, StorageUnavailableError, type Repository } from '../storage/types'
-import type { SingMic } from './singMic'
+import type { EnsureOpts, SingMic } from './singMic'
 
 /**
  * 唯一的组装点（P-3b）：打开存储（失败降级）、懒创建音频、浏览器计时器 → Runtime。
@@ -83,50 +83,126 @@ export interface LazyMic extends SingMic {
 export function createLazyMic(audio: LazyAudio, open?: (ctx: AudioContext) => Promise<MicSession>): LazyMic {
   let session: MicSession | null = null
   let opening: Promise<MicSession> | null = null
+  let calibrated = false
+  let calibrating: Promise<void> | null = null
+  let lastNoiseRms: number | null = null
   let failure: MicFailure | null = null
+  /** close() 每调用一次加一：在它之前发起的打开，到达时作废（关闭并丢弃） */
+  let gen = 0
   const opener = open ?? ((ctx: AudioContext) => import('./micPlatform').then((m) => m.openBrowserMic(ctx)))
 
-  async function ensureSession(): Promise<MicSession> {
-    if (session) return session
-    const ctx = audio.context
-    if (!ctx) throw new Error('音频尚未启用')
-    if (!opening) {
-      opening = (async () => {
-        const s = await opener(ctx)
-        await s.calibrate()
-        return s
-      })()
-    }
+  /** 丢弃一个已死（或要放弃）的会话，下一次 ensure/start 会重开 */
+  function drop(s: MicSession): void {
     try {
-      session = await opening
-      failure = null
-      return session
-    } catch (e) {
-      opening = null
-      failure = e instanceof MicError ? e.reason : 'error'
-      throw e
+      s.close()
+    } catch {
+      /* 已关 */
     }
+    if (session === s) {
+      session = null
+      opening = null
+      calibrated = false
+      calibrating = null
+    }
+  }
+
+  async function ensureSession(opts: EnsureOpts = {}): Promise<MicSession> {
+    const wantCal = opts.calibrate ?? true
+    const g = gen
+    if (!session) {
+      const ctx = audio.context
+      if (!ctx) throw new Error('音频尚未启用')
+      if (!opening) {
+        const mine: Promise<MicSession> = (async () => {
+          const s = await opener(ctx)
+          if (g !== gen) {
+            s.close()
+            throw new MicError('error', '麦克风已关闭')
+          }
+          s.setNoiseRms(lastNoiseRms ?? 0)
+          session = s
+          calibrated = false
+          return s
+        })()
+        opening = mine
+        mine.catch(() => {
+          if (opening === mine) opening = null
+        })
+      }
+      try {
+        await opening
+        failure = null
+      } catch (e) {
+        if (g === gen) failure = e instanceof MicError ? e.reason : 'error'
+        throw e
+      }
+    }
+    const s = session
+    if (!s) throw new MicError('error', '麦克风已关闭')
+    if (wantCal && !calibrated) {
+      opts.onCalibrating?.()
+      if (!calibrating) {
+        const p: Promise<void> = s.calibrate().then(
+          (n) => {
+            if (session === s) {
+              lastNoiseRms = n
+              calibrated = true
+            }
+            if (calibrating === p) calibrating = null
+          },
+          (e) => {
+            if (calibrating === p) calibrating = null
+            drop(s)
+            failure = e instanceof MicError ? e.reason : 'error'
+            throw e
+          },
+        )
+        calibrating = p
+      }
+      await calibrating
+    }
+    return s
   }
 
   return {
     get failure() {
       return failure
     },
-    async ensure() {
-      await ensureSession()
+    async ensure(opts) {
+      await ensureSession(opts)
     },
     async start(onSegment) {
-      // 仅在会话的 start() 已执行后才 resolve
-      const s = await ensureSession()
-      s.start(onSegment)
+      // 题中不校准（用户可能正要开口），沿用上一次的基线；仅在会话的 start() 已执行后才 resolve
+      const s = await ensureSession({ calibrate: false })
+      try {
+        s.start(onSegment)
+      } catch (e) {
+        drop(s)
+        throw e
+      }
     },
     async stop() {
-      return session ? session.stop() : []
+      const s = session
+      if (!s) return []
+      try {
+        return await s.stop()
+      } catch (e) {
+        drop(s)
+        throw e
+      }
     },
     close() {
-      session?.close()
+      gen++
+      const s = session
       session = null
       opening = null
+      calibrated = false
+      calibrating = null
+      try {
+        s?.close()
+      } catch {
+        /* 已关 */
+      }
     },
   }
 }

@@ -40,6 +40,8 @@ export const MIC_CONSTRAINTS: MediaStreamConstraints = {
 
 export interface MicSession {
   readonly noiseRms: number
+  /** 不校准、直接套用已知的噪声基线（重开会话时复用上一次的校准结果） */
+  setNoiseRms(n: number): void
   calibrate(seconds?: number): Promise<number>
   start(onSegment: (s: Segment) => void): void
   stop(): Promise<Segment[]>
@@ -157,6 +159,9 @@ export async function openMic(deps: MicDeps): Promise<MicSession> {
   return {
     get noiseRms() {
       return noiseRms
+    },
+    setNoiseRms(n) {
+      noiseRms = n
     },
     calibrate(seconds = CALIBRATE_SEC) {
       if (failure) return Promise.reject(failure)

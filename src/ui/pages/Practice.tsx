@@ -57,6 +57,8 @@ export function Practice() {
   const runtimeError = snap.lastError !== lastErrorAtItemStart.current ? snap.lastError : null
   const phaseRef = useRef(session.phase)
   phaseRef.current = session.phase
+  // 本场结束或离开练习页：释放麦克风
+  useEffect(() => () => mic.close(), [mic])
   const endEarly = () => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
 

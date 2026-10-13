@@ -16,7 +16,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const fakeMic: SingMic = { ensure: async () => {}, start: async () => {}, stop: async () => [] }
+const fakeMic: SingMic = { ensure: async () => {}, start: async () => {}, stop: async () => [], close: () => {} }
 
 function fakeAudio(): LazyAudio {
   return {

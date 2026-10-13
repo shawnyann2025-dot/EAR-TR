@@ -61,6 +61,33 @@ describe('开场打开麦克风（P-4 spec §4.4）', () => {
     expect(p.singMode).toBe('self')
     expect(p.micFallbackReason).toBe('denied')
     expect(await screen.findByText(/第 1 \//)).toBeTruthy()
+    // 提示跨页面保留：练习页上仍可见，点「知道了」消除
+    expect(screen.getByText(/没有麦克风权限，唱题改为自评/)).toBeTruthy()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '知道了' })) })
+    expect(screen.queryByText(/没有麦克风权限，唱题改为自评/)).toBeNull()
+  })
+
+  it('练习页卸载（本场结束或离开）时释放麦克风', async () => {
+    const mic = fakeMic()
+    let closed = 0
+    mic.close = () => { closed++ }
+    await setup(mic)
+    const btn = await screen.findByRole('button', { name: '开始今天的练习' })
+    await act(async () => { fireEvent.click(btn) })
+    await screen.findByText(/第 1 \//)
+    const before = closed
+    cleanup()
+    expect(closed).toBeGreaterThan(before)
+  })
+
+  it('pagehide 时释放麦克风', async () => {
+    const mic = fakeMic()
+    let closed = 0
+    mic.close = () => { closed++ }
+    await setup(mic)
+    await screen.findByRole('button', { name: '开始今天的练习' })
+    act(() => { window.dispatchEvent(new Event('pagehide')) })
+    expect(closed).toBe(1)
   })
 
   it('自评模式不打开麦克风', async () => {

@@ -7,11 +7,10 @@ const curriculum = buildCurriculum()
 type Status = 'notStarted' | 'inProgress' | 'mainDone'
 
 export function Home(props: { onOpenSettings: () => void }) {
-  const { runtime, audio, mic } = useRuntime()
+  const { runtime, audio, mic, pushNotice } = useRuntime()
   const snap = useSnapshot()
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
   const aliveRef = useRef(true)
@@ -48,15 +47,15 @@ export function Home(props: { onOpenSettings: () => void }) {
     try {
       await audio.unlock()
       if ((snap.profile?.singMode ?? 'detect') === 'detect') {
-        setBusy('正在校准环境噪声，请保持安静…')
+        setBusy('请在弹窗中允许使用麦克风…')
         try {
-          await mic.ensure()
+          await mic.ensure({ onCalibrating: () => setBusy('请保持安静 3 秒，正在校准环境噪声…') })
         } catch (e) {
           if (e instanceof MicError && (e.reason === 'denied' || e.reason === 'unsupported')) {
             await runtime.updateProfile({ singMode: 'self', micFallbackReason: e.reason })
-            setNotice(e.reason === 'denied' ? '没有麦克风权限，唱题改为自评' : '此浏览器不支持收音，唱题改为自评')
+            pushNotice(e.reason === 'denied' ? '没有麦克风权限，唱题改为自评' : '此浏览器不支持收音，唱题改为自评')
           } else {
-            setNotice(`麦克风暂时不可用：${e instanceof Error ? e.message : String(e)}`)
+            pushNotice(`麦克风暂时不可用：${e instanceof Error ? e.message : String(e)}`)
           }
         } finally {
           setBusy(null)
@@ -78,14 +77,13 @@ export function Home(props: { onOpenSettings: () => void }) {
       </header>
       {error && <p className="error">{error}</p>}
       {busy && <p>{busy}</p>}
-      {notice && <p className="banner warn">{notice}</p>}
       <div className="home-actions">
-        {status === 'notStarted' && <button type="button" className="primary big" onClick={() => void go(false)}>开始今天的练习</button>}
-        {status === 'inProgress' && <button type="button" className="primary big" onClick={() => void go(false)}>继续今天的练习</button>}
+        {status === 'notStarted' && <button type="button" className="primary big" disabled={busy !== null} onClick={() => void go(false)}>开始今天的练习</button>}
+        {status === 'inProgress' && <button type="button" className="primary big" disabled={busy !== null} onClick={() => void go(false)}>继续今天的练习</button>}
         {status === 'mainDone' && (
           <>
             <p>今天的主线已经练完。</p>
-            <button type="button" className="primary big" onClick={() => void go(true)}>再练一场</button>
+            <button type="button" className="primary big" disabled={busy !== null} onClick={() => void go(true)}>再练一场</button>
           </>
         )}
       </div>

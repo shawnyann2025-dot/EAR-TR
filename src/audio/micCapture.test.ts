@@ -57,6 +57,17 @@ describe('openMic：失败分类（P-4 spec §4.4）', () => {
   })
 })
 
+describe('openMic：setNoiseRms', () => {
+  it('不校准直接设定噪声基线，capture-start 带上它', async () => {
+    const { deps, sent } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.setNoiseRms(0.03)
+    expect(mic.noiseRms).toBe(0.03)
+    mic.start(() => {})
+    expect(sent.find((m) => m.type === 'capture-start')).toMatchObject({ noiseRms: 0.03 })
+  })
+})
+
 describe('openMic：会话', () => {
   it('帧从 worklet 转发给 Worker', async () => {
     const { deps, nodePort, sent } = fakeEnv()

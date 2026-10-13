@@ -111,6 +111,7 @@ describe('createLazyMic', () => {
     const s = {
       calibrations: 0,
       noiseRms: 0,
+      setNoiseRms: vi.fn((n: number) => { s.noiseRms = n }),
       calibrate: async () => { s.calibrations++; return 0.01 },
       start: vi.fn(),
       stop: async () => [],
@@ -148,5 +149,108 @@ describe('createLazyMic', () => {
     expect(await mic.stop()).toEqual([])
     await mic.start(() => {}).then(() => order.push('resolved'))
     expect(order).toEqual(['session.start', 'resolved'])
+  })
+})
+
+describe('createLazyMic：失效、校准与释放', () => {
+  const audioWith = (context: AudioContext | null) => ({ context } as unknown as LazyAudio)
+  type S = MicSession & { calibrations: number }
+  const session = (): S => {
+    const s = {
+      calibrations: 0,
+      noiseRms: 0,
+      setNoiseRms: vi.fn((n: number) => { s.noiseRms = n }),
+      calibrate: async () => { s.calibrations++; return 0.02 },
+      start: vi.fn(),
+      stop: async () => [],
+      close: vi.fn(),
+    }
+    return s
+  }
+  const ctx = {} as AudioContext
+
+  it('stop 被拒：关掉该会话；下一次 start 重开（open 共 2 次）', async () => {
+    const a = session()
+    a.stop = async () => { throw new Error('dead') }
+    const b = session()
+    const sessions = [a, b]
+    const open = vi.fn(async () => sessions.shift()!)
+    const mic = createLazyMic(audioWith(ctx), open)
+    await mic.start(() => {})
+    await expect(mic.stop()).rejects.toThrow('dead')
+    expect(a.close).toHaveBeenCalled()
+    await mic.start(() => {})
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(b.start).toHaveBeenCalled()
+  })
+
+  it('session.start 抛错：关掉会话、重新抛出，下次重开', async () => {
+    const a = session()
+    a.start = vi.fn(() => { throw new Error('x') })
+    const b = session()
+    const sessions = [a, b]
+    const open = vi.fn(async () => sessions.shift()!)
+    const mic = createLazyMic(audioWith(ctx), open)
+    await expect(mic.start(() => {})).rejects.toThrow('x')
+    expect(a.close).toHaveBeenCalled()
+    await mic.start(() => {})
+    expect(open).toHaveBeenCalledTimes(2)
+  })
+
+  it('ensure 之后 start 不再校准', async () => {
+    const s = session()
+    const mic = createLazyMic(audioWith(ctx), async () => s)
+    await mic.ensure()
+    await mic.start(() => {})
+    expect(s.calibrations).toBe(1)
+  })
+
+  it('没有先 ensure 就 start：不校准，噪声基线为 0', async () => {
+    const s = session()
+    const mic = createLazyMic(audioWith(ctx), async () => s)
+    await mic.start(() => {})
+    expect(s.calibrations).toBe(0)
+    expect(s.setNoiseRms).toHaveBeenCalledWith(0)
+  })
+
+  it('死后重开：沿用上一次校准的噪声基线，不重新校准', async () => {
+    const a = session()
+    a.stop = async () => { throw new Error('dead') }
+    const b = session()
+    const sessions = [a, b]
+    const mic = createLazyMic(audioWith(ctx), async () => sessions.shift()!)
+    await mic.ensure()
+    await mic.start(() => {})
+    await expect(mic.stop()).rejects.toThrow()
+    await mic.start(() => {})
+    expect(b.calibrations).toBe(0)
+    expect(b.setNoiseRms).toHaveBeenCalledWith(0.02)
+  })
+
+  it('ensure 的 onCalibrating 在打开之后、校准之前调用', async () => {
+    const s = session()
+    const order: string[] = []
+    s.calibrate = async () => { order.push('calibrate'); return 0.01 }
+    const mic = createLazyMic(audioWith(ctx), async () => { order.push('open'); return s })
+    await mic.ensure({ onCalibrating: () => order.push('onCalibrating') })
+    expect(order).toEqual(['open', 'onCalibrating', 'calibrate'])
+  })
+
+  it('打开进行中 close()：迟到的会话被关闭且不缓存', async () => {
+    const a = session()
+    const b = session()
+    let resolveA!: (s: S) => void
+    const queue: Array<() => Promise<S>> = [() => new Promise<S>((r) => { resolveA = r }), async () => b]
+    const open = vi.fn(() => queue.shift()!())
+    const mic = createLazyMic(audioWith(ctx), open)
+    const p = mic.ensure()
+    const settled = p.then(() => 'ok', () => 'rejected')
+    mic.close()
+    resolveA(a)
+    expect(await settled).toBe('rejected')
+    expect(a.close).toHaveBeenCalled()
+    await mic.start(() => {})
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(b.start).toHaveBeenCalled()
   })
 })

@@ -206,7 +206,7 @@ describe('AnswerArea：唱模态目标音级显示', () => {
 
 describe('AnswerArea：唱题路由', () => {
   const sing = generate({ kpId: 'degree:major:mi', modality: 'sing', track: 'T', contextLevel: 1, variationLevel: 1, difficultyStep: 3, seed: 2, segment: 'focus' }, c)
-  const mic = { ensure: async () => {}, start: async () => {}, stop: async () => [] }
+  const mic = { ensure: async () => {}, start: async () => {}, stop: async () => [], close: () => {} }
   const render1 = (singProp?: { mode: 'detect' | 'self'; mic: typeof mic | null }) =>
     render(<AnswerArea exercise={sing} scheme="solfege" phase="answering" playback={null} clock={{ now: () => 0, latencySec: 0 }} schedule={() => () => {}} onPlayTarget={vi.fn()} onResponse={vi.fn()} sing={singProp} />)
 

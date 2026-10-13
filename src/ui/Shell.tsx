@@ -8,7 +8,7 @@ import { Summary } from './pages/Summary'
 import { useRuntime, useSnapshot } from './RuntimeContext'
 
 export function Shell(props: { storageWarning: string | null }) {
-  const { runtime } = useRuntime()
+  const { runtime, mic, notices, dismissNotice } = useRuntime()
   const snap = useSnapshot()
   const [settings, setSettings] = useState(false)
   const [dismissed, setDismissed] = useState<SessionState | null>(null)
@@ -18,6 +18,13 @@ export function Shell(props: { storageWarning: string | null }) {
   useEffect(() => {
     runtime.ensureProfile().catch((e) => setBootError(e instanceof Error ? e.message : String(e)))
   }, [runtime])
+
+  // 离开页面时释放麦克风（回来后按需重开）
+  useEffect(() => {
+    const onHide = () => mic.close()
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [mic])
 
   const s = snap.session
   let page
@@ -32,6 +39,11 @@ export function Shell(props: { storageWarning: string | null }) {
     <>
       {props.storageWarning && <div className="banner warn">{props.storageWarning}</div>}
       {snap.storageError && <div className="banner warn">{snap.storageError}</div>}
+      {notices.map((n, i) => (
+        <div className="banner warn" key={n}>
+          {n} <button type="button" onClick={() => dismissNotice(i)}>知道了</button>
+        </div>
+      ))}
       {page}
     </>
   )
