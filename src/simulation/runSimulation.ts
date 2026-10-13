@@ -1,8 +1,6 @@
 import {
   buildCurriculum,
   knowledgePointsOfPhase,
-  requirementFor,
-  unlockedKnowledgePoints,
   type Curriculum,
 } from '../curriculum/curriculum'
 import {
@@ -12,28 +10,16 @@ import {
 } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
 import { evaluateGate, nextPhase } from '../scheduling/gate'
-import { applyGating } from '../scheduling/gating'
+import type { SessionProgress } from '../scheduling/guardrails'
 import {
-  decompose,
-  isStagnant,
-  needsRelief,
-  relieveSpec,
-  type SessionProgress,
-} from '../scheduling/guardrails'
-import {
-  applyLadder,
   LADDER_MAX_STEP,
   LADDER_MIN_STEP,
-  resumeLadder,
   type LadderState,
 } from '../scheduling/ladder'
-import {
-  applyAttempt,
-  getMastery,
-  type MasteryState,
-} from '../scheduling/mastery'
+import type { MasteryState } from '../scheduling/mastery'
 import type { ExerciseSpec } from '../scheduling/exerciseSpec'
 import { buildSessionPlan, checkInterleaving } from '../scheduling/scheduler'
+import { prepareItem, recordAnswer, stagnationUpdates } from '../session/item'
 import {
   makeVirtualLearner,
   type LearnerParams,
@@ -155,25 +141,12 @@ export function runSimulation(params: SimulationParams): SimulationResult {
 
     for (const planned of scored) {
       const key = masteryKey(planned.kpId, planned.modality)
-      // 阶梯续起（裁定 C + D）：会话内状态仍不落盘，但不再每天从
-      // step=0、consecutiveCorrect=0 重建——续接上该 key 上次的档位
-      // 与连对计数（resumeLadder，从 window 尾部推导；规则见 ladder.ts）。
-      // 只续档位不续连对计数的话，每天只曝光 1 次的 key 永远够不到
-      // LADDER_UP_AFTER=2，跟正确率高低无关，meanLadderStep 会恒卡在
-      // 0 附近，门控用它当判据就永不可达（已用仿真跟踪实测验证）。
-      let ladder = ladders.get(key) ?? resumeLadder(getMastery(store, key).window)
-
-      // 计划里的 difficultyStep 一律是 0（快机制不落盘，spec §7.4.1）；
-      // 运行时在出题前把阶梯档位写进规格——这是 P-2b 生成器拿到的那份
-      // 规格，P-3 会话运行时也必须这样做，否则生成器永远只看到 0 档。
-      let spec: ExerciseSpec = { ...planned, difficultyStep: ladder.step }
-      if (needsRelief(progress)) {
-        // 会话内回血（spec §7.5）：降一档、降一级语境与变异。阶梯跟着
-        // 落到回血后的档位、连对清零——否则下一题又跳回原档。
-        reliefTriggered = true
-        spec = relieveSpec(spec)
-        ladder = { step: spec.difficultyStep, consecutiveCorrect: 0 }
-      }
+      // 阶梯续起、写档位、会话内回血都在 session/item.ts 的 prepareItem 里
+      // （规则与理由见该文件与 ladder.ts）；仿真与真实会话共用同一套。
+      const prepared = prepareItem(planned, ladders.get(key), store, progress)
+      const ladder = prepared.ladder
+      const spec = prepared.spec
+      if (prepared.relief) reliefTriggered = true
 
       const ability = learner.abilityOf(key)
       const probability = learner.probabilityOf(spec, ladder.step)
@@ -193,20 +166,10 @@ export function runSimulation(params: SimulationParams): SimulationResult {
         if (correct) ladderCorrect++
       }
 
-      const steppedLadder = applyLadder(ladder, correct)
-      ladders.set(key, steppedLadder)
-
-      const cap = requirementFor(curriculum, spec.kpId, phaseId)
-      // 记下这次尝试结束后所在的阶梯档位（而非提问时的档位）——门控用它
-      // 当升级判据（建模决策 4），续接（见上）也读它。记录提问前的档位会
-      // 有一个隐蔽的回放 bug：同一 key 同一天出现第 2 次时（focus+boss
-      // 同时命中同一模态很常见），第 1 次的「提问前档位」等于第 2 次的
-      // 「提问前档位」，若第 2 次触发升档，这次升档只活在本 session 的
-      // `ladders` 里、从未写回 window——次日续接读到的仍是升档前的值，
-      // 于是同一次升档在 session 内每天重放、却永远没有真正持久化，
-      // meanLadderStep 长期卡在同一档位不动（已用仿真跟踪实测验证）。
-      const updated = applyAttempt(getMastery(store, key), correct, day, steppedLadder.step)
-      const stateAfter = applyGating(updated, cap)
+      // 答后档位写回 window、门控取舍见 session/item.ts 的 recordAnswer
+      const recorded = recordAnswer({ curriculum, phaseId, day, mastery: store, spec, ladder, correct })
+      ladders.set(key, recorded.ladder)
+      const stateAfter = recorded.state
       store.set(key, stateAfter)
       params.trace?.({
         day,
@@ -228,15 +191,9 @@ export function runSimulation(params: SimulationParams): SimulationResult {
 
     // 跨天护栏：停滞的知识点触发拆解
     const decomposedKeys: MasteryKey[] = []
-    for (const kpId of unlockedKnowledgePoints(curriculum, phaseId)) {
-      for (const m of MODALITIES) {
-        const key = masteryKey(kpId, m)
-        const state = store.get(key)
-        if (state && isStagnant(state, day)) {
-          store.set(key, decompose(state))
-          decomposedKeys.push(key)
-        }
-      }
+    for (const u of stagnationUpdates(curriculum, phaseId, day, store)) {
+      store.set(u.key, u.state)
+      decomposedKeys.push(u.key)
     }
 
     days.push({
