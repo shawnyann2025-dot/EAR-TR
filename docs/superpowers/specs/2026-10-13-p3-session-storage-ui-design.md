@@ -159,7 +159,6 @@ interface AttemptRecord {
   at: string                        // ISO 时间戳（仅作记录，不参与任何判定）
   day: number
   sessionNo: number
-  mode: 'session' | 'drill'          // drill = 重练小会话：不产生任何持久化副作用（3.8）
   kpId: KnowledgePointId
   modality: Modality
   spec: ExerciseSpec                // 实时规格（含档位与 seed），可复现该题
@@ -171,7 +170,6 @@ interface AttemptRecord {
 interface SessionRecord {
   day: number
   sessionNo: number
-  mode: 'session' | 'drill'          // drill = 重练小会话：不产生任何持久化副作用（3.8）
   plan: SessionPlan
   index: number
   progress: SessionProgress
