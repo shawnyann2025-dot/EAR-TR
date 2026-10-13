@@ -1,12 +1,11 @@
 import { buildCurriculum } from '../../curriculum/curriculum'
 import { parseKpId, trackOfKind, type Modality } from '../../curriculum/knowledgePoints'
 import type { Mode } from '../../music/key'
-import { doMidiForKey } from '../../music/register'
 import { makeRng } from '../../music/rng'
 import type { ExerciseSpec } from '../../scheduling/exerciseSpec'
 import type { VariationLevel } from '../../curriculum/stages'
 import type { GeneratorInput } from '../types'
-import { resolveVariation } from '../variation'
+import { doMidiFor, resolveVariation } from '../variation'
 
 const curriculum = buildCurriculum()
 
@@ -32,7 +31,7 @@ export function generatorInput(
     spec,
     curriculum,
     resolved,
-    doMidi: doMidiForKey(resolved.key, resolved.centerMidi),
+    doMidi: doMidiFor(resolved),
     rng,
   }
 }

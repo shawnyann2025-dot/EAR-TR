@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DEGREE_SEMITONES, type ScaleDegree } from '../../music/key'
 import { midiToFreq } from '../../music/pitch'
-import { degreeToMidi } from '../../music/register'
+import { degreeToMidi, tonicMidi } from '../../music/register'
+import { DEGREE_ENTRIES } from '../data/degrees'
 import { DIFFICULTY_TABLE } from '../difficulty'
 import {
   MAX_MELODIC_LEAP,
@@ -143,5 +144,46 @@ describe('确定性', () => {
         gen(generatorInput('degree:major:la', 'notate', { step: 4, seed: 11 })),
       )
     }
+  })
+})
+
+describe('小调以主音为锚（终审 item 1）', () => {
+  const minorKps = DEGREE_ENTRIES.filter((e) => e.pool === 'minor').map((e) => e.kpId)
+  const seeds = Array.from({ length: 40 }, (_, i) => i + 1)
+
+  it('所有小调知识点 × 档位 × 种子：播放/目标音高都在 [主音, 主音+11]', () => {
+    for (const kp of minorKps) {
+      for (const modality of ['recognize', 'sing', 'notate'] as const) {
+        for (let step = 0; step <= 5; step++) {
+          for (const seed of seeds) {
+            const input = generatorInput(kp, modality, { step, seed, mode: 'minor', variationLevel: 1 })
+            const tonic = tonicMidi(input.resolved.key, input.doMidi)
+            const gen = { recognize: recognizeDegree, sing: singDegrees, notate: notateMelody }[modality]
+            const r = gen(input)
+            const midis = [
+              ...r.notes.map((n) => n.midi),
+              ...(r.format.kind === 'pitch' ? r.format.targets.map((t) => t.midi) : []),
+            ]
+            for (const m of midis) {
+              expect(m).toBeGreaterThanOrEqual(tonic)
+              expect(m).toBeLessThanOrEqual(tonic + 11)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('degree:minor:do 的 step 5 听写里出现 do→ti→la（3-2-1）', () => {
+    let found = false
+    for (let seed = 1; seed <= 400 && !found; seed++) {
+      const r = notateMelody(generatorInput('degree:minor:do', 'notate', { step: 5, seed, mode: 'minor' }))
+      if (r.answer.kind !== 'sequence') throw new Error('答案格式错')
+      const ids = r.answer.ids
+      for (let i = 0; i + 2 < ids.length; i++) {
+        if (ids[i] === 'do' && ids[i + 1] === 'ti' && ids[i + 2] === 'la') found = true
+      }
+    }
+    expect(found).toBe(true)
   })
 })

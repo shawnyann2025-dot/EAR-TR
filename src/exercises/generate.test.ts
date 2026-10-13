@@ -145,6 +145,15 @@ describe('generate：属性（P-2b spec §11 第 3 条）', () => {
     }
   })
 
+  it('小调的主音落在音区中心附近（折叠前 ±6 半音）', () => {
+    for (const s of specs) {
+      const ex = generate(s, c)
+      if (ex.resolved.key.mode !== 'minor') continue
+      const tonic = freqToMidi(ex.feedback.replay.events[0].freqHz)
+      expect(Math.abs(tonic - ex.resolved.centerMidi)).toBeLessThanOrEqual(6 + 1e-6)
+    }
+  })
+
   it('答案格式与题目格式同种', () => {
     for (const s of specs) {
       const ex = generate(s, c)

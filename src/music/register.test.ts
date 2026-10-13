@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { doMidiForKey, degreeToMidi, tonicMidi } from './register'
+import { doMidiForKey, degreeToMidi, degreeToMidiFromTonic, tonicMidi } from './register'
 import { degreeToPitchClass, SCALE_DEGREES, type Key } from './key'
 
 const C_MAJOR: Key = { tonic: 0, mode: 'major' }
@@ -62,5 +62,26 @@ describe('tonicMidi', () => {
 
   it('A 小调、do=60 时主音 la = MIDI 69', () => {
     expect(tonicMidi(A_MINOR, 60)).toBe(69)
+  })
+})
+
+describe('degreeToMidiFromTonic', () => {
+  it('大调与 degreeToMidi 一致', () => {
+    for (const d of SCALE_DEGREES) {
+      expect(degreeToMidiFromTonic(d, C_MAJOR, 60)).toBe(degreeToMidi(d, 60))
+    }
+  })
+
+  it('小调：音级落在 [主音, 主音+11]，la=主音，do=主音+3，ti=主音+2', () => {
+    const tonic = tonicMidi(A_MINOR, 57)
+    for (const d of SCALE_DEGREES) {
+      const m = degreeToMidiFromTonic(d, A_MINOR, 57)
+      expect(m).toBeGreaterThanOrEqual(tonic)
+      expect(m).toBeLessThanOrEqual(tonic + 11)
+    }
+    expect(degreeToMidiFromTonic('la', A_MINOR, 57)).toBe(tonic)
+    expect(degreeToMidiFromTonic('do', A_MINOR, 57)).toBe(tonic + 3)
+    expect(degreeToMidiFromTonic('ti', A_MINOR, 57)).toBe(tonic + 2)
+    expect(degreeToMidiFromTonic('le', A_MINOR, 57)).toBe(tonic + 11)
   })
 })

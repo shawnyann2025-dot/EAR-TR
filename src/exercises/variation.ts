@@ -1,5 +1,6 @@
 import type { Key, Mode } from '../music/key'
 import type { TimbreId } from '../music/playback'
+import { doMidiForKey } from '../music/register'
 import type { Rng } from '../music/rng'
 import type { ResolvedVariation } from './types'
 
@@ -30,8 +31,8 @@ export function defaultKey(mode: Mode): Key {
  * 管线第 1 步：按 variationLevel 决定每条轴取默认值还是从 rng 抽取。
  *
  * 开放顺序固定（主 spec §6.2）：1 调、2 音色、3 音区、4 速度、5 力度、6 呈现方式。
- * 未开放的轴不消耗 rng——这样提升 variationLevel 不会改变已开放轴的取值序列之外的东西，
- * 且 level 0 的题完全不依赖 seed 的这一段。
+ * rng 消耗：level 0 不消耗 rng；每开放一条轴按轴序消耗固定次数的抽取。
+ * 因此再开放一条轴会让其后所有抽取（内容、选项打乱）整体错位，不保持原有序列。
  */
 export function resolveVariation(
   variationLevel: number,
@@ -52,4 +53,13 @@ export function resolveVariation(
   const presentation = open(6) ? rng.pick(PRESENTATIONS) : 'block'
 
   return { key, timbreId, centerMidi, bpm, velocity, presentation }
+}
+
+/**
+ * 'do' 的 MIDI 落位：让主音（而非 do）最接近音区中心。
+ * 大调主音就是 do；小调主音 la 在 do 上方 9 半音，所以按 centerMidi - 9 取 do。
+ */
+export function doMidiFor(resolved: ResolvedVariation): number {
+  const { key, centerMidi } = resolved
+  return doMidiForKey(key, key.mode === 'minor' ? centerMidi - 9 : centerMidi)
 }

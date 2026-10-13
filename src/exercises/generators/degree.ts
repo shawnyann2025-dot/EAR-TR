@@ -2,7 +2,7 @@ import type { Modality } from '../../curriculum/knowledgePoints'
 import type { ScaleDegree } from '../../music/key'
 import { midiToFreq } from '../../music/pitch'
 import type { NoteSpec } from '../../music/playback'
-import { degreeToMidi } from '../../music/register'
+import { degreeToMidiFromTonic } from '../../music/register'
 import { degreeEntry, requireDegreeEntry } from '../data/degrees'
 import { BASE_BPM, SING_CENTS_TOLERANCE, difficultyParams } from '../difficulty'
 import { pickOptions, poolMembers, shuffle } from '../pools'
@@ -27,7 +27,7 @@ export const recognizeDegree: Generator = (input): ContentResult => {
   const p = difficultyParams(spec.difficultyStep)
   const durSec = p.recognizeNoteSec * (BASE_BPM / resolved.bpm)
   const notes: NoteSpec[] = [
-    { midi: degreeToMidi(entry.degree, doMidi), atSec: 0, durSec, gain: resolved.velocity },
+    { midi: degreeToMidiFromTonic(entry.degree, resolved.key, doMidi), atSec: 0, durSec, gain: resolved.velocity },
   ]
   const options = pickOptions(entry.degree, poolDegrees(input), p.recognizeOptionCount, rng)
   return {
@@ -51,7 +51,7 @@ export const singDegrees: Generator = (input): ContentResult => {
   const sequence = shuffle([entry.degree, ...others], rng)
 
   const targets: PitchTarget[] = sequence.map((degree) => {
-    const midi = degreeToMidi(degree, doMidi)
+    const midi = degreeToMidiFromTonic(degree, resolved.key, doMidi)
     return { degree, midi, freqHz: midiToFreq(midi), centsTolerance: SING_CENTS_TOLERANCE }
   })
   const feedbackNotes: NoteSpec[] = targets.map((t, i) => ({
@@ -75,7 +75,7 @@ export const notateMelody: Generator = (input): ContentResult => {
   const entry = requireDegreeEntry(spec.kpId)
   const length = difficultyParams(spec.difficultyStep).notateMelodyLength
   const pool = poolDegrees(input)
-  const midiOf = (d: ScaleDegree) => degreeToMidi(d, doMidi)
+  const midiOf = (d: ScaleDegree) => degreeToMidiFromTonic(d, resolved.key, doMidi)
   const near = (from: ScaleDegree) =>
     pool.filter((d) => Math.abs(midiOf(d) - midiOf(from)) <= MAX_MELODIC_LEAP)
 

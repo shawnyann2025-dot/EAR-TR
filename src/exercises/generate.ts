@@ -1,7 +1,7 @@
 import type { Curriculum } from '../curriculum/curriculum'
 import type { KnowledgePointId } from '../curriculum/knowledgePoints'
 import { notesToPlan } from '../music/playback'
-import { doMidiForKey, tonicMidi } from '../music/register'
+import { tonicMidi } from '../music/register'
 import { makeRng } from '../music/rng'
 import { describeSpec, type ExerciseSpec } from '../scheduling/exerciseSpec'
 import { wrapWithTonalContext } from './context'
@@ -10,7 +10,7 @@ import { FEEDBACK_ANCHOR_SEC, buildFeedback } from './feedback'
 import { DEGREE_GENERATORS } from './generators/degree'
 import { MODULATION_GENERATORS } from './generators/modulation'
 import type { Exercise, GeneratorEntry } from './types'
-import { resolveVariation } from './variation'
+import { doMidiFor, resolveVariation } from './variation'
 
 export { answerAsResponse, grade } from './grade'
 export type * from './types'
@@ -43,7 +43,7 @@ export function generate(spec: ExerciseSpec, curriculum: Curriculum): Exercise {
 
   const rng = makeRng(spec.seed)
   const resolved = resolveVariation(spec.variationLevel, entry.mode, rng)
-  const doMidi = doMidiForKey(resolved.key, resolved.centerMidi)
+  const doMidi = doMidiFor(resolved)
   const content = entry.byModality[spec.modality]({ spec, curriculum, resolved, doMidi, rng })
 
   const { plan, contentStartSec } = wrapWithTonalContext({

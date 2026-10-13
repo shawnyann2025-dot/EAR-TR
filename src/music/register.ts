@@ -58,3 +58,12 @@ export function foldPlanToRange(
   })
   return { events, totalDurSec: plan.totalDurSec }
 }
+
+/**
+ * 以主音为锚的音级落位：音级落在 [主音, 主音+11]。
+ * 大调与 degreeToMidi 完全一致；小调里 la=主音，do 在主音上方小三度、ti 在上方大二度。
+ */
+export function degreeToMidiFromTonic(degree: ScaleDegree, key: Key, doMidi: number): number {
+  const rel = DEGREE_SEMITONES[degree] - DEGREE_SEMITONES[tonicDegree(key)]
+  return tonicMidi(key, doMidi) + (((rel % 12) + 12) % 12)
+}
