@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { buildCurriculum, knowledgePointsOfPhase } from '../curriculum/curriculum'
 import { MODALITIES, masteryKey } from '../curriculum/knowledgePoints'
 import { initialMastery, type MasteryState } from '../scheduling/mastery'
+import { buildSessionPlan } from '../scheduling/scheduler'
 import { bossPassed, createSession, reduce } from './machine'
-import type { ReduceContext, SessionEffect, SessionState } from './types'
+import { SESSION_MINUTES, type ReduceContext, type SessionEffect, type SessionState } from './types'
 
 const c = buildCurriculum()
 const ctx = (mastery: Map<string, MasteryState>): ReduceContext => ({ curriculum: c, mastery, nowIso: 'x' })
@@ -65,6 +66,11 @@ describe('结束流程', () => {
     const saves = find(r.effects, 'saveMastery')
     expect(saves.map((s) => s.key)).toContain(k)
     expect(saves.find((s) => s.key === k)!.state.contextLevel).toBe(0)
+    // 关卡评估必须用拆解后的状态：拆解前该 key 达标会过关，拆解后窗口清空而阻塞
+    expect(find(r.effects, 'advancePhase')).toEqual([])
+    expect(r.state.summary?.gate.passed).toBe(false)
+    expect(r.state.summary?.gate.blockingKeys).toBeGreaterThanOrEqual(1)
+    expect(r.state.summary?.gate.bossSatisfied).toBe(true)
   })
 
   it('endEarly：做护栏与总结，不评估关卡、不升阶段；会话记为完成', () => {
@@ -86,5 +92,23 @@ describe('结束流程', () => {
     const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 } }), { type: 'start' }, ctx(allP1Strong()))
     const order = r.effects.map((e) => e.type).filter((t) => t !== 'saveMastery')
     expect(order).toEqual(['advancePhase', 'saveSession', 'ended'])
+  })
+
+  it('重练模式：只发 ended', () => {
+    const d = createSession({ mode: 'drill', day: 30, sessionNo: 0, phaseId: 'P1', plan: { day: 30, seed: 1, phaseId: 'P1', items: [] } })
+    const r = reduce(d, { type: 'start' }, ctx(allP1Strong()))
+    expect(r.effects.map((e) => e.type)).toEqual(['ended'])
+  })
+
+  it('答题中 endEarly：先 stopAudio，会话记录为完成', () => {
+    const plan = buildSessionPlan({ curriculum: c, store: new Map(), phaseId: 'P1', today: 0, seed: 11, minutes: SESSION_MINUTES })
+    const x = ctx(new Map())
+    let st = reduce(createSession({ mode: 'session', day: 0, sessionNo: 0, phaseId: 'P1', plan }), { type: 'start' }, x).state
+    st = reduce(st, { type: 'contentPlayed' }, x).state
+    expect(st.phase).toBe('answering')
+    const r = reduce(st, { type: 'endEarly' }, x)
+    expect(r.effects[0]).toEqual({ type: 'stopAudio' })
+    expect(find(r.effects, 'saveSession')[0].record.completed).toBe(true)
+    expect(r.state.summary?.gate.evaluated).toBe(false)
   })
 })
