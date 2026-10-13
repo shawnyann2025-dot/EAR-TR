@@ -39,8 +39,8 @@ interface Piece {
 
 ### 3.2 鼓音色（`src/audio/`）
 
-- 新增三种 `TimbreId`：`kick`（正弦，起音后快速下滑音高）、`snare`（白噪声短脉冲 + 中频正弦）、`hat`（高通白噪声，极短）。
-- `AudioEngine` 增加一份共享的白噪声 `AudioBuffer` 与 `AudioBufferSourceNode` 路径；`PlaybackEvent` 的鼓事件以 `timbreId` 区分，`freqHz` 对鼓无意义（取 0 或忽略）。
+- 新增 `DrumId = 'kick' | 'snare' | 'hat'`，以 `PlaybackEvent.drum` 标记鼓事件（不新增 `TimbreId`，鼓不进音色变异轴）：`kick` 正弦起音后快速下滑音高（150→50 Hz）；`snare` 带通白噪声（1800 Hz）；`hat` 高通白噪声（7000 Hz），极短。
+- `AudioEngine` 增加一份共享的白噪声 `AudioBuffer` 与 `AudioBufferSourceNode` 路径；鼓事件的 `freqHz` 与 `timbreId` 被忽略。
 - 鼓型（`src/boss/drums.ts`）：底鼓在每小节第一拍（4/4 再加第三拍），军鼓在反拍（2/4、4/4 的第 2、4 拍；3/4 无军鼓），踩镲每个感知拍一下（4/4 为八分音符）。
 
 ### 3.3 五个关卡生成器（`src/boss/generators.ts`）
