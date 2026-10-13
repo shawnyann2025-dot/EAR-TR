@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildCurriculum } from '../curriculum/curriculum'
 import { answerAsResponse } from '../exercises/generate'
+import type { Response } from '../exercises/types'
 import type { PlaybackPlan } from '../music/playback'
+import { masteryKey } from '../curriculum/knowledgePoints'
+import { knowledgePointsOfPhase } from '../curriculum/curriculum'
+import { MODALITIES } from '../curriculum/knowledgePoints'
+import type { MasteryState } from '../scheduling/mastery'
+import { initialMastery } from '../scheduling/mastery'
+import type { SessionRecord } from '../session/types'
 import { MemoryRepository } from '../storage/memory'
 import type { Repository } from '../storage/types'
 import { createRuntime, type AudioPort, type RuntimeDeps, type TimerPort } from './runtime'
@@ -20,7 +27,11 @@ function fakes() {
   const timer: TimerPort = {
     after: (_s, fn) => { pending.push(fn); return () => { const i = pending.indexOf(fn); if (i >= 0) pending.splice(i, 1) } },
   }
-  const flush = () => { while (pending.length) pending.shift()!() }
+  /** 触发仍在等待的计时回调，并等排队的 dispatch 跑完 */
+  const flush = async () => {
+    while (pending.length) pending.shift()!()
+    await new Promise((r) => setTimeout(r, 0))
+  }
   return { audio, timer, played, flush, stoppedCount: () => stopped }
 }
 
@@ -30,16 +41,26 @@ function deps(repo: Repository, today = '2026-10-13'): RuntimeDeps & ReturnType<
 }
 
 /** 一直答对，直到会话结束（或到 limit 道题为止） */
-async function playThrough(rt: ReturnType<typeof createRuntime>, flush: () => void, limit = Infinity) {
+async function playThrough(rt: ReturnType<typeof createRuntime>, flush: () => Promise<void>, limit = Infinity) {
   let n = 0
   while (rt.getSnapshot().session?.phase !== 'done' && n < limit) {
-    flush() // 播完 → contentPlayed
+    await flush() // 播完 → contentPlayed
     const s = rt.getSnapshot().session!
     if (s.phase === 'answering') {
       await rt.dispatch({ type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs: 500 })
       n++
       await rt.dispatch({ type: 'next' })
     }
+  }
+}
+
+/** 同种类的必错作答 */
+function wrongResponse(r: Response): Response {
+  switch (r.kind) {
+    case 'choice': return { kind: 'choice', id: '__none__' }
+    case 'sequence': return { kind: 'sequence', ids: [] }
+    case 'pitch': return { kind: 'pitch', selfAssessedCorrect: false }
+    case 'tap': return { kind: 'tap', tapsSec: [] }
   }
 }
 
@@ -83,6 +104,9 @@ describe('createRuntime', () => {
     const rt2 = createRuntime(d2)
     await rt2.startToday()
     expect(rt2.getSnapshot().session?.current?.planIndex).toBe(indexBefore)
+    const planned = (await repo.loadSession(0, 0))!.plan.items[indexBefore]
+    const live = rt2.getSnapshot().session!.current!.spec
+    expect([live.kpId, live.modality, live.seed]).toEqual([planned.kpId, planned.modality, planned.seed])
     await playThrough(rt2, d2.flush)
     expect(await repo.countAttempts()).toBeGreaterThan(answered)
     expect((await repo.loadSession(0, 0))?.completed).toBe(true)
@@ -130,7 +154,8 @@ describe('createRuntime', () => {
     fail = true
     await playThrough(rt, d.flush, 2)
     expect(rt.getSnapshot().storage).toBe('readOnly')
-    expect(rt.getSnapshot().lastError).toMatch(/disk full/)
+    expect(rt.getSnapshot().storageError).toMatch(/disk full/)
+    expect(rt.getSnapshot().storageError).toContain('可导出备份')
     expect(rt.getSnapshot().session?.phase).not.toBe('idle')
   })
 
@@ -140,7 +165,7 @@ describe('createRuntime', () => {
     const seen: string[] = []
     rt.subscribe((s) => seen.push(s.session?.phase ?? 'none'))
     await rt.startToday()
-    d.flush()
+    await d.flush()
     expect(seen).toContain('presenting')
     expect(seen.at(-1)).toBe('answering')
   })
@@ -160,7 +185,7 @@ describe('createRuntime', () => {
     await rt.dispatch({ type: 'interrupted' })
     await rt.dispatch({ type: 'start' })
     expect(rt.getSnapshot().session?.phase).toBe('presenting')
-    d.flush() // 只触发仍在等待的回调；旧回调必须已被取消
+    await d.flush() // 只触发仍在等待的回调；旧回调必须已被取消
     const s = rt.getSnapshot().session!
     expect(s.phase).toBe('answering')
     expect(s.current!.planIndex).toBe(firstIndex)
@@ -188,5 +213,107 @@ describe('createRuntime', () => {
     expect(writes).toBe(0)
     expect(await repo.countAttempts()).toBe(attempts)
     expect(await repo.loadSession(0, 0)).toEqual(record)
+  })
+
+  it('并发：answer 与 next 不等待就连发，慢落盘下最终记录与内存一致', async () => {
+    const repo = new MemoryRepository()
+    let slow = false
+    const slowRepo: Repository = new Proxy(repo, {
+      get(target, prop, receiver) {
+        const v = Reflect.get(target, prop, receiver)
+        if (typeof v !== 'function') return v
+        return async (...args: unknown[]) => {
+          if (slow && prop === 'appendAttempt') await new Promise((r) => setTimeout(r, 20))
+          return v.apply(target, args)
+        }
+      },
+    })
+    const d = deps(slowRepo)
+    const rt = createRuntime(d)
+    await rt.startToday()
+    for (let guard = 0; ; guard++) {
+      expect(guard).toBeLessThan(500)
+      await d.flush()
+      const s = rt.getSnapshot().session!
+      if (s.phase === 'answering' && s.index === s.plan.items.length - 1) break
+      if (s.phase === 'answering') {
+        await rt.dispatch({ type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs: 1 })
+        await rt.dispatch({ type: 'next' })
+      }
+    }
+    slow = true
+    const s = rt.getSnapshot().session!
+    const p1 = rt.dispatch({ type: 'answer', response: answerAsResponse(s.current!.exercise.answer), latencyMs: 1 })
+    const p2 = rt.dispatch({ type: 'next' })
+    await Promise.all([p1, p2])
+    const mem = rt.getSnapshot().session!
+    expect(mem.phase).toBe('done')
+    const rec = (await repo.loadSession(0, 0))!
+    expect(rec.completed).toBe(true)
+    expect(rec.index).toBe(mem.index)
+    expect(await rt.todayStatus()).toBe('mainDone')
+  })
+
+  it('连点两次 startToday（不等待）只播放一次', async () => {
+    const d = deps(new MemoryRepository())
+    const rt = createRuntime(d)
+    await Promise.all([rt.startToday(), rt.startToday()])
+    expect(d.played).toHaveLength(1)
+  })
+
+  it('升阶段：advancePhase 更新并保存 Profile、记关卡，下一场按 P2 出题', async () => {
+    const repo = new MemoryRepository()
+    const strong = (): MasteryState => ({
+      ...initialMastery(),
+      stability: 20,
+      contextLevel: 1,
+      variationLevel: 1,
+      window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: 10 + i, difficultyStep: 3 })),
+      lastSeenDay: 29,
+    })
+    for (const kp of knowledgePointsOfPhase(c, 'P1')) for (const m of MODALITIES) await repo.putMastery(masteryKey(kp, m), strong())
+    await repo.saveProfile({ id: 'p-test', createdAtLocalDate: '2026-09-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: false, startPhase: null }, schemaVersion: 1 })
+    const rec: SessionRecord = {
+      day: 30, sessionNo: 0, phaseId: 'P1', plan: { day: 30, seed: 1, phaseId: 'P1', items: [] }, index: 0,
+      progress: { attempted: 0, correct: 0 }, boss: { attempted: 5, correct: 5 }, byTrack: { T: 0, H: 0, R: 0 }, reliefTriggered: false, completed: false,
+    }
+    await repo.putSession(rec)
+    const rt = createRuntime(deps(repo, '2026-10-13'))
+    await rt.startToday()
+    expect(rt.getSnapshot().session?.phase).toBe('done')
+    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
+    expect((await repo.loadProfile())?.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P1', passedOnDay: 30 }])
+    await rt.startExtra()
+    expect(rt.getSnapshot().session?.phaseId).toBe('P2')
+    expect(rt.getSnapshot().session?.sessionNo).toBe(1)
+  })
+
+  it('重练：有错题时开 drill 会话，且不产生任何新落盘', async () => {
+    const repo = new MemoryRepository()
+    const d = deps(repo)
+    const rt = createRuntime(d)
+    await rt.startToday()
+    // 答第一道计分题故意答错：用一个必错的作答（换成另一题的答案）
+    let wrong = false
+    for (let guard = 0; rt.getSnapshot().session?.phase !== 'done'; guard++) {
+      expect(guard).toBeLessThan(500)
+      await d.flush()
+      const s = rt.getSnapshot().session!
+      if (s.phase === 'answering') {
+        const right = answerAsResponse(s.current!.exercise.answer)
+        if (!wrong && s.current!.scored) {
+          // 逐个尝试：答错则 wrongThisSession 增长
+          await rt.dispatch({ type: 'answer', response: wrongResponse(right), latencyMs: 1 })
+          wrong = s.wrongThisSession.length < rt.getSnapshot().session!.wrongThisSession.length
+        } else await rt.dispatch({ type: 'answer', response: right, latencyMs: 1 })
+        await rt.dispatch({ type: 'next' })
+      }
+    }
+    expect(rt.getSnapshot().session!.wrongThisSession.length).toBeGreaterThan(0)
+    const before = JSON.stringify(await repo.exportAll('x'))
+    await rt.startDrill()
+    expect(rt.getSnapshot().session?.mode).toBe('drill')
+    expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
   })
 })

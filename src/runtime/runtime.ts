@@ -34,6 +34,8 @@ export interface RuntimeSnapshot {
   session: SessionState | null
   storage: 'ok' | 'readOnly'
   lastError: string | null
+  /** 落盘失败的原因（只读降级时设置；不会被 itemError 覆盖） */
+  storageError: string | null
 }
 
 export interface Runtime {
@@ -50,9 +52,17 @@ export interface Runtime {
 /** 薄壳（P-3 spec §5）：持有状态与掌握度副本，按顺序执行状态机的副作用 */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const { repo, audio, timer, curriculum } = deps
-  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null }
+  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null }
   let mastery = new Map<MasteryKey, MasteryState>()
   let cancelTimer: (() => void) | null = null
+  let queue: Promise<void> = Promise.resolve()
+  /** 所有会改状态的入口串行执行：下一个操作等上一个的全部副作用落盘后再开始 */
+  const serial = <T>(op: () => Promise<T>): Promise<T> => {
+    const p = queue.then(op)
+    queue = p.then(() => undefined, () => undefined)
+    return p
+  }
+  const describe = (e: unknown): string => (e instanceof Error ? e.message : String(e))
   const listeners = new Set<(s: RuntimeSnapshot) => void>()
 
   const notify = () => {
@@ -71,12 +81,12 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       try {
         await op()
       } catch (e) {
-        set({ storage: 'readOnly', lastError: `进度暂时无法保存：${String((e as Error).message ?? e)}` })
+        set({ storage: 'readOnly', storageError: `进度暂时无法保存（可导出备份）：${describe(e)}` })
       }
     }
   }
 
-  async function ensureProfile(): Promise<Profile> {
+  async function ensureProfileNow(): Promise<Profile> {
     if (snapshot.profile) return snapshot.profile
     let p = await repo.loadProfile()
     if (!p) {
@@ -103,7 +113,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         const { endSec } = audio.play(effect.plan)
         cancelTimer = timer.after(Math.max(0, endSec - audio.currentTime), () => {
           cancelTimer = null
-          void dispatch({ type: 'contentPlayed' })
+          dispatch({ type: 'contentPlayed' }).catch((e) => set({ lastError: describe(e) }))
         })
         return
       }
@@ -113,14 +123,13 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         audio.stopAll()
         return
       case 'saveMastery':
-        mastery = new Map(mastery).set(effect.key, effect.state)
         return write(() => repo.putMastery(effect.key, effect.state))
       case 'saveAttempt':
         return write(() => repo.appendAttempt(effect.attempt))
       case 'saveSession':
         return write(() => repo.putSession(effect.record))
       case 'advancePhase': {
-        const p = { ...(snapshot.profile ?? (await ensureProfile())), phaseId: effect.to }
+        const p = { ...(snapshot.profile ?? (await ensureProfileNow())), phaseId: effect.to }
         set({ profile: p })
         await write(() => repo.saveProfile(p))
         return write(() => repo.putGate({ phaseId: effect.from, passedOnDay: effect.day }))
@@ -133,26 +142,47 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     }
   }
 
-  async function dispatch(event: SessionEvent): Promise<void> {
+  async function dispatchNow(event: SessionEvent): Promise<void> {
     const session = snapshot.session
     if (!session) return
     const { state, effects } = reduce(session, event, { curriculum, mastery, nowIso: deps.nowIso() })
     set({ session: state })
-    for (const e of effects) await run(e)
-    notify()
+    // 掌握度副本先同步更新，之后任何 await 都不会让后续 reduce 读到旧值
+    for (const e of effects) if (e.type === 'saveMastery') mastery = new Map(mastery).set(e.key, e.state)
+    try {
+      for (const e of effects) {
+        try {
+          await run(e)
+        } catch (err) {
+          set({ lastError: describe(err) })
+        }
+      }
+    } finally {
+      notify()
+    }
   }
+  const dispatch = (event: SessionEvent) => serial(() => dispatchNow(event))
 
   async function begin(state: SessionState): Promise<void> {
     mastery = await repo.loadMastery()
     set({ session: state })
-    await dispatch({ type: 'start' })
+    await dispatchNow({ type: 'start' })
   }
 
   async function openSession(sessionNo: number): Promise<void> {
-    const p = await ensureProfile()
+    const p = await ensureProfileNow()
     const day = today(p)
+    const live = snapshot.session
+    const liveActive = live !== null && live.phase !== 'done' && live.phase !== 'idle'
+    // 同一场正在进行：不重复开（避免重复播放）
+    if (liveActive && live.mode === 'session' && live.day === day && live.sessionNo === sessionNo) return
     const record = await repo.loadSession(day, sessionNo)
     if (record?.completed) return
+    if (liveActive) {
+      cancelTimer?.()
+      cancelTimer = null
+      audio.stopAll()
+    }
     if (record) return begin(resumeSession(record))
     const store = await repo.loadMastery()
     const plan = buildSessionPlan({
@@ -174,30 +204,30 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
-    ensureProfile,
-    async todayStatus() {
-      const p = await ensureProfile()
+    ensureProfile: () => serial(ensureProfileNow),
+    todayStatus: () => serial(async () => {
+      const p = await ensureProfileNow()
       const r = await repo.loadSession(today(p), 0)
-      return !r ? 'notStarted' : r.completed ? 'mainDone' : 'inProgress'
-    },
-    startToday: () => openSession(0),
-    async startExtra() {
-      const p = await ensureProfile()
+      return !r ? 'notStarted' as const : r.completed ? 'mainDone' as const : 'inProgress' as const
+    }),
+    startToday: () => serial(() => openSession(0)),
+    startExtra: () => serial(async () => {
+      const p = await ensureProfileNow()
       const day = today(p)
       const main = await repo.loadSession(day, 0)
       if (!main?.completed) return
       const latest = (await repo.latestSessionNo(day)) ?? 0
       const latestRecord = await repo.loadSession(day, latest)
       return openSession(latestRecord?.completed ? latest + 1 : latest)
-    },
-    async startDrill() {
+    }),
+    startDrill: () => serial(async () => {
       const s = snapshot.session
       if (!s || s.phase !== 'done') return
       const drill = createDrill(s)
       if (!drill) return
       set({ session: drill })
-      await dispatch({ type: 'start' })
-    },
+      await dispatchNow({ type: 'start' })
+    }),
     dispatch,
   }
 }
