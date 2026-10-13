@@ -8,11 +8,15 @@ export const BOSS_PASS_RATIO = 0.9
 export const PHRASE_BARS = 2
 /** 每天最多尝试次数（P-5 spec D2） */
 export const BOSS_ATTEMPTS_PER_DAY = 3
+/** 旋律中心音（MIDI）：各调的「本位 do」取离它最近的那个 do（doMidiForKey），MelodyNote.octave 相对它计 */
+export const MELODY_CENTER_MIDI = 67
 
 export type PartId = 'melody' | 'chords' | 'rhythm' | 'meter' | 'newTonic'
 
 export interface MelodyNote {
   degree: ScaleDegree
+  /** 相对所在调「本位 do」（离 MELODY_CENTER_MIDI 最近的 do）的八度数；0 = 本位八度 */
+  octave: number
   /** 所在调：0 = 原调，1 = 转调后（仅 P5） */
   keyIndex: 0 | 1
   /** 从第一小节起的四分音符拍数 */
@@ -33,8 +37,10 @@ export interface Piece {
   melody: MelodyNote[]
   /** 每小节一个和弦（所在调的级数 id）；无和声为 null */
   chords: string[] | null
-  /** 每小节一个音型 id（仅 4/4 用音型库时）；否则 null */
+  /** 每小节一个音型 id（仅节奏是作答部分时，即 P4）；否则 null */
   rhythm: string[] | null
+  /** 每小节和弦的转位（0 原位、1 第一转位），渲染低音用；答案仍是级数 id。仅 P4 且已解锁第一转位时有，否则 null */
+  inversions: (0 | 1)[] | null
   drums: boolean
 }
 
