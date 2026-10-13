@@ -3,7 +3,7 @@ import { QUALITY_INTERVALS } from '../../music/chord'
 import { DEGREE_SEMITONES } from '../../music/key'
 import { BASSLINE_PATTERNS, functionalChord } from '../data/chords'
 import { DIFFICULTY_TABLE } from '../difficulty'
-import { chordSlotSec } from './chordCommon'
+import { chordSlotSec, MIN_CHORD_SING_TARGETS } from './chordCommon'
 import {
   BASSLINE_GENERATORS,
   INVERSION_GENERATORS,
@@ -128,7 +128,7 @@ describe('低音线·三模态', () => {
     for (let step = 0; step <= 5; step++) {
       const r = BASSLINE_GENERATORS.sing(generatorInput('chord:bassline', 'sing', { step, seed: 3 }))
       if (r.format.kind !== 'pitch') throw new Error('格式错')
-      const n = DIFFICULTY_TABLE.singTargetCount[step]
+      const n = Math.max(MIN_CHORD_SING_TARGETS, DIFFICULTY_TABLE.singTargetCount[step])
       const targets = r.format.targets
       expect(targets).toHaveLength(n)
       const bassIds = BASSLINE_PATTERNS.map((p) => p.id)

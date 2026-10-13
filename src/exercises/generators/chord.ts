@@ -21,6 +21,7 @@ import {
   chordSlotSec,
   degreeAbove,
   fitItem,
+  MIN_CHORD_SING_TARGETS,
   pitchTargets,
   sungSequence,
 } from './chordCommon'
@@ -88,7 +89,7 @@ const recognizeQuality: Generator = (input): ContentResult => {
 const singQualityArpeggio: Generator = (input): ContentResult => {
   const { resolved, rng } = input
   const entry = qualityEntry(input)
-  const count = difficultyParams(input.spec.difficultyStep).singTargetCount
+  const count = Math.max(MIN_CHORD_SING_TARGETS, difficultyParams(input.spec.difficultyStep).singTargetCount)
   const root = rng.pick(MAJOR_SCALE_DEGREES)
   const head = arpeggioHead({ rootDegree: root, quality: entry.quality, inversion: 0 }, input, count)
   const reference: NoteSpec[] = [{ midi: head.midis[0], atSec: 0, durSec: SING_NOTE_SEC, gain: resolved.velocity }]
@@ -146,7 +147,7 @@ const recognizeFunctional: Generator = (input): ContentResult => {
 
 const singFunctionalArpeggio: Generator = (input): ContentResult => {
   const entry = functionalEntry(input)
-  const count = difficultyParams(input.spec.difficultyStep).singTargetCount
+  const count = Math.max(MIN_CHORD_SING_TARGETS, difficultyParams(input.spec.difficultyStep).singTargetCount)
   const head = arpeggioHead(entry.chord, input, count)
   const fit = fitItem({
     notes: [],
@@ -169,6 +170,8 @@ const notateFunctional: Generator = (input): ContentResult => {
   const entry = functionalEntry(input)
   const length = difficultyParams(input.spec.difficultyStep).notateChordCount
   const pool = poolIds(input)
+  if (length < 2) throw new Error(`${input.spec.kpId}：听写长度 ${length} 不足 2`)
+  if (pool.length < 3) throw new Error(`${input.spec.kpId}：和弦池只有 ${pool.length} 个成员，至少需要 3 个`)
   const tonicId = TONIC_CHORD_ID[entry.mode]
   // 目标若是主和弦，首位已含目标；否则放在第 2 位及以后
   const targetPos = entry.answerId === tonicId ? 0 : 1 + rng.int(length - 1)

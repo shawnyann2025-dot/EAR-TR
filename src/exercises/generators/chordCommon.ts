@@ -15,6 +15,9 @@ export const ARPEGGIO_STEP_SEC = 0.18
 /** 和弦占位里实际发声的比例，留一点空隙让和弦交替清楚 */
 export const CHORD_LEGATO = 0.9
 
+/** 和弦类唱题至少唱的目标音数：只唱一个音无法区分品质或功能 */
+export const MIN_CHORD_SING_TARGETS = 2
+
 /** 根音落在 [主音, 主音+11]——与 T 轨音级同一锚点（P-2b spec §7.2、§14） */
 export function chordRootMidi(chord: Chord, key: Key, doMidi: number): number {
   return degreeToMidiFromTonic(chord.rootDegree, key, doMidi)
@@ -46,11 +49,12 @@ export function chordNotes(
   if (presentation === 'block') {
     return midis.map((midi) => ({ midi, atSec, durSec, gain }))
   }
-  const step = ARPEGGIO_STEP_SEC * (BASE_BPM / bpm)
+  // 短时长时收紧步长，保证每个音都在 durSec 之前起音、并恰在 atSec+durSec 结束
+  const step = Math.min(ARPEGGIO_STEP_SEC * (BASE_BPM / bpm), durSec / (midis.length + 1))
   return midis.map((midi, i) => ({
     midi,
     atSec: atSec + i * step,
-    durSec: Math.max(step, durSec - i * step),
+    durSec: durSec - i * step,
     gain,
   }))
 }

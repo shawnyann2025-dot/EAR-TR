@@ -23,6 +23,7 @@ import {
   chordSlotSec,
   degreeAbove,
   fitItem,
+  MIN_CHORD_SING_TARGETS,
   pitchTargets,
   sungSequence,
 } from './chordCommon'
@@ -140,6 +141,7 @@ export interface BasslineRender {
  */
 export function renderBassline(pattern: BasslinePattern, input: GeneratorInput): BasslineRender {
   const { resolved, doMidi } = input
+  if (resolved.key.mode !== 'major') throw new Error(`低音线模板仅支持大调，当前为 ${resolved.key.mode}`)
   const slot = chordSlotSec(resolved.bpm)
   const bassMidis: number[] = []
   const bassDegrees: ScaleDegree[] = []
@@ -187,7 +189,10 @@ const recognizeBassline: Generator = (input): ContentResult => {
 const singBassline: Generator = (input): ContentResult => {
   const pattern = input.rng.pick(BASSLINE_PATTERNS)
   const out = renderBassline(pattern, input)
-  const count = Math.min(difficultyParams(input.spec.difficultyStep).singTargetCount, out.bassMidis.length)
+  const count = Math.min(
+    Math.max(MIN_CHORD_SING_TARGETS, difficultyParams(input.spec.difficultyStep).singTargetCount),
+    out.bassMidis.length,
+  )
   const sung = out.bassMidis.slice(0, count)
   const fit = fitItem({
     notes: out.notes,

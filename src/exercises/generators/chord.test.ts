@@ -4,7 +4,7 @@ import { midiToFreq } from '../../music/pitch'
 import { requireChordEntry, functionalChord } from '../data/chords'
 import { DIFFICULTY_TABLE } from '../difficulty'
 import { PLAN_MIDI_MAX, PLAN_MIDI_MIN } from '../context'
-import { chordSlotSec } from './chordCommon'
+import { chordSlotSec, MIN_CHORD_SING_TARGETS } from './chordCommon'
 import { FUNCTIONAL_GENERATORS, QUALITY_GENERATORS } from './chord'
 import { SING_NOTE_SEC } from './degree'
 import { generatorInput } from './testInput'
@@ -54,7 +54,7 @@ describe('品质·唱', () => {
     for (let step = 0; step <= 5; step++) {
       const r = QUALITY_GENERATORS.sing(input('chord:quality-min', 'sing', { step, seed: step + 1 }))
       if (r.format.kind !== 'pitch') throw new Error('格式错')
-      const n = DIFFICULTY_TABLE.singTargetCount[step]
+      const n = Math.max(MIN_CHORD_SING_TARGETS, DIFFICULTY_TABLE.singTargetCount[step])
       const t = r.format.targets
       expect(t).toHaveLength(n)
       expect(r.notes).toHaveLength(1)
@@ -67,6 +67,20 @@ describe('品质·唱', () => {
       expect(r.feedbackNotes.map((f) => f.midi)).toEqual(t.map((x) => x.midi))
       expect(r.durSec).toBeCloseTo(SING_NOTE_SEC * (1 + n), 12)
       expect(r.prompt).toBe('sing-arpeggio')
+    }
+  })
+})
+
+describe('品质·唱：至少两个目标，能区分品质', () => {
+  it('step 0 同 seed 的 maj 与 min 目标音程序列不同', () => {
+    for (const seed of SEEDS) {
+      const iv = (kp: string) => {
+        const r = QUALITY_GENERATORS.sing(input(kp, 'sing', { step: 0, seed }))
+        if (r.format.kind !== 'pitch') throw new Error('格式错')
+        const t = r.format.targets
+        return t.map((x) => x.midi - t[0].midi)
+      }
+      expect(iv('chord:quality-maj')).not.toEqual(iv('chord:quality-min'))
     }
   })
 })

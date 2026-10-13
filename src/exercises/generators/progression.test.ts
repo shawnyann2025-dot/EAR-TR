@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildCurriculum } from '../../curriculum/curriculum'
 import { requireChordEntry, type ProgressionEntry } from '../data/chords'
 import { DIFFICULTY_TABLE } from '../difficulty'
-import { chordSlotSec } from './chordCommon'
+import { chordSlotSec, MIN_CHORD_SING_TARGETS } from './chordCommon'
 import { SING_NOTE_SEC } from './degree'
 import {
   PROGRESSION_GENERATORS,
@@ -79,7 +79,7 @@ describe('进行·唱', () => {
       const inp = input('prog:vi-IV-I-V', 'sing', { step })
       const r = PROGRESSION_GENERATORS.sing(inp)
       if (r.format.kind !== 'pitch') throw new Error('格式错')
-      const n = DIFFICULTY_TABLE.singTargetCount[step]
+      const n = Math.max(MIN_CHORD_SING_TARGETS, DIFFICULTY_TABLE.singTargetCount[step])
       expect(r.format.targets.map((t) => t.degree)).toEqual(['la', 'fa', 'do'].slice(0, n))
       expect(r.notes.length).toBeGreaterThan(0)
       const slot = chordSlotSec(inp.resolved.bpm)

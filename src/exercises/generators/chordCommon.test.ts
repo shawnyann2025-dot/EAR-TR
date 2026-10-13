@@ -63,6 +63,14 @@ describe('chordNotes', () => {
     for (const n of notes) expect(n.atSec + n.durSec).toBeCloseTo(0.9, 12)
   })
 
+  it('arpeggio：时长很短时收紧步长，仍全部在 atSec+durSec 结束且时值为正', () => {
+    const notes = chordNotes([60, 64, 67, 71], 1, 0.5, 0.7, 'arpeggio', 70)
+    for (const n of notes) {
+      expect(n.atSec + n.durSec).toBeCloseTo(1.5, 12)
+      expect(n.durSec).toBeGreaterThan(0)
+    }
+  })
+
   it('chordSlotSec：两拍', () => {
     expect(chordSlotSec(120)).toBeCloseTo(1, 12)
   })

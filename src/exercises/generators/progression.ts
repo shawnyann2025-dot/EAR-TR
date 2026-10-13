@@ -20,6 +20,7 @@ import {
   chordRootMidi,
   chordSlotSec,
   fitItem,
+  MIN_CHORD_SING_TARGETS,
   pitchTargets,
   sungSequence,
 } from './chordCommon'
@@ -101,7 +102,7 @@ const singProgressionRoots: Generator = (input): ContentResult => {
   const { resolved, doMidi } = input
   const entry = progressionEntry(input)
   const count = Math.min(
-    difficultyParams(input.spec.difficultyStep).singTargetCount,
+    Math.max(MIN_CHORD_SING_TARGETS, difficultyParams(input.spec.difficultyStep).singTargetCount),
     entry.chordIds.length,
   )
   const { notes, durSec } = progressionNotes(entry, input)
