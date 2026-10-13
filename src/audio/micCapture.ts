@@ -46,6 +46,11 @@ export interface MicSession {
   close(): void
 }
 
+interface Settler<T> {
+  resolve(v: T): void
+  reject(e: unknown): void
+}
+
 function classify(e: unknown): MicFailure {
   const name = (e as { name?: string } | null)?.name
   if (name === 'NotAllowedError' || name === 'SecurityError') return 'denied'
@@ -72,76 +77,122 @@ export async function openMic(deps: MicDeps): Promise<MicSession> {
     throw new MicError('unsupported', `此浏览器不支持 AudioWorklet：${String((e as Error)?.message ?? e)}`)
   }
 
-  const node = deps.connectSource(stream)
-  const worker = deps.createWorker()
+  let node: MicNode | null = null
+  let worker: WorkerLike
+  try {
+    node = deps.connectSource(stream)
+    worker = deps.createWorker()
+  } catch (e) {
+    stopTracks()
+    try {
+      node?.disconnect()
+    } catch {
+      /* 已在失败路径上，忽略 */
+    }
+    throw new MicError('error', `无法连接麦克风：${String((e as Error)?.message ?? e)}`)
+  }
+  const micNode = node
   const send = (m: PipelineIn, transfer?: Transferable[]) => worker.postMessage(m, transfer)
 
   // worklet → Worker：帧原样转发
-  node.port.onmessage = (e) => {
+  micNode.port.onmessage = (e) => {
     const m = e.data as PipelineIn
-    if (m.type === 'frame') send(m, [m.samples.buffer])
+    if (m.type === 'frame' && !failure) send(m, [m.samples.buffer])
   }
 
   let noiseRms = 0
   let onSegment: ((s: Segment) => void) | null = null
   let capturing = false
-  let pending: { calibrated?: (n: number) => void; stopped?: (s: Segment[]) => void } = {}
-  let rejectPending: Array<(e: MicError) => void> = []
+  let startedSinceStop = false
   let failure: MicError | null = null
+  let calibrating: Promise<number> | null = null
+  let calibEntry: Settler<number> | null = null
+  const stoppedQueue: Array<Settler<Segment[]>> = []
+  let lastStop: Promise<Segment[]> | null = null
+  let stopsInFlight = 0
+
+  function shutdown(err: MicError) {
+    if (failure) return
+    failure = err
+    onSegment = null
+    capturing = false
+    const c = calibEntry
+    calibEntry = null
+    c?.reject(err)
+    for (const q of stoppedQueue.splice(0)) q.reject(err)
+    stopsInFlight = 0
+    stopTracks()
+    micNode.disconnect()
+    worker.terminate()
+  }
 
   worker.onmessage = (e) => {
     const m = e.data as PipelineOut
-    if (m.type === 'calibrated') pending.calibrated?.(m.noiseRms)
-    else if (m.type === 'segment') onSegment?.(m.segment)
-    else if (m.type === 'stopped') pending.stopped?.(m.segments)
+    if (m.type === 'calibrated') {
+      const c = calibEntry
+      calibEntry = null
+      c?.resolve(m.noiseRms)
+    } else if (m.type === 'segment') {
+      if (stopsInFlight === 0) onSegment?.(m.segment)
+    } else if (m.type === 'stopped') {
+      if (stopsInFlight > 0) stopsInFlight--
+      stoppedQueue.shift()?.resolve(m.segments)
+    }
   }
-  worker.onerror = () => {
-    failure = new MicError('error', 'Worker 出错')
-    const rejects = rejectPending
-    rejectPending = []
-    for (const r of rejects) r(failure)
+  worker.onerror = () => shutdown(new MicError('error', 'Worker 出错'))
+
+  async function doCalibrate(seconds: number): Promise<number> {
+    const done = new Promise<number>((resolve, reject) => {
+      calibEntry = { resolve, reject }
+    })
+    done.catch(() => {}) // wait 期间出错时避免未处理拒绝；真正的拒绝由 await 抛出
+    send({ type: 'calibrate-start' })
+    await deps.wait(seconds * 1000)
+    if (failure) throw failure
+    send({ type: 'calibrate-end' })
+    noiseRms = await done
+    return noiseRms
   }
 
   return {
     get noiseRms() {
       return noiseRms
     },
-    async calibrate(seconds = CALIBRATE_SEC) {
-      if (failure) throw failure
-      const done = new Promise<number>((resolve, reject) => {
-        pending = { ...pending, calibrated: resolve }
-        rejectPending.push(reject)
+    calibrate(seconds = CALIBRATE_SEC) {
+      if (failure) return Promise.reject(failure)
+      if (calibrating) return calibrating
+      const p = doCalibrate(seconds).finally(() => {
+        calibEntry = null
+        if (calibrating === p) calibrating = null
       })
-      done.catch(() => {}) // 等待期间（wait）出错时避免未处理拒绝；真正的拒绝由下面的 await 抛出
-      send({ type: 'calibrate-start' })
-      await deps.wait(seconds * 1000)
-      if (failure) throw failure
-      send({ type: 'calibrate-end' })
-      noiseRms = await done
-      return noiseRms
+      calibrating = p
+      return p
     },
     start(cb) {
+      if (failure) return
       onSegment = cb
       capturing = true
+      startedSinceStop = true
       send({ type: 'capture-start', noiseRms })
     },
-    async stop() {
-      if (failure) throw failure
-      if (!capturing) return []
+    stop() {
+      if (failure) return Promise.reject(failure)
+      if (stoppedQueue.length > 0 && !startedSinceStop && lastStop) return lastStop
+      if (!capturing) return Promise.resolve([])
       capturing = false
-      const done = new Promise<Segment[]>((resolve, reject) => {
-        pending = { ...pending, stopped: resolve }
-        rejectPending.push(reject)
-      })
-      send({ type: 'capture-stop' })
-      const segs = await done
+      startedSinceStop = false
       onSegment = null
-      return segs
+      stopsInFlight++
+      const p = new Promise<Segment[]>((resolve, reject) => {
+        const entry: Settler<Segment[]> = { resolve, reject }
+        stoppedQueue.push(entry)
+      })
+      lastStop = p
+      send({ type: 'capture-stop' })
+      return p
     },
     close() {
-      stopTracks()
-      node.disconnect()
-      worker.terminate()
+      shutdown(new MicError('error', '麦克风已关闭'))
     },
   }
 }

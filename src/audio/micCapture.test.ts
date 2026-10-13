@@ -135,3 +135,103 @@ describe('openMic：Worker 出错', () => {
     await expect(mic.stop()).rejects.toMatchObject({ reason: 'error' })
   })
 })
+
+describe('openMic：加固（复审一轮）', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+  const seg = (hz: number) => ({ startSec: 0, endSec: 0.5, medianHz: hz })
+
+  it('connectSource 抛错 → error，并停音轨', async () => {
+    const { deps, stopTrack } = fakeEnv()
+    const e = await openMic({ ...deps, connectSource: () => { throw new Error('x') } }).catch((x) => x)
+    expect(e).toBeInstanceOf(MicError)
+    expect(e.reason).toBe('error')
+    expect(stopTrack).toHaveBeenCalled()
+  })
+
+  it('createWorker 抛错 → error，停音轨并断开节点', async () => {
+    const { deps, stopTrack, node } = fakeEnv()
+    const e = await openMic({ ...deps, createWorker: () => { throw new Error('x') } }).catch((x) => x)
+    expect(e.reason).toBe('error')
+    expect(stopTrack).toHaveBeenCalled()
+    expect(node.disconnect).toHaveBeenCalled()
+  })
+
+  it('校准进行中 close：calibrate 拒绝，之后的 stop 也拒绝', async () => {
+    const { deps } = fakeEnv()
+    const mic = await openMic(deps)
+    const caught = mic.calibrate(3).catch((x) => x)
+    await tick()
+    mic.close()
+    expect(await caught).toMatchObject({ reason: 'error', message: '麦克风已关闭' })
+    await expect(mic.stop()).rejects.toMatchObject({ reason: 'error' })
+    await expect(mic.calibrate()).rejects.toMatchObject({ reason: 'error' })
+  })
+
+  it('close 两次不抛错', async () => {
+    const { deps, worker } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.close()
+    expect(() => mic.close()).not.toThrow()
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('并发 calibrate 共享同一次校准', async () => {
+    const { deps, sent, worker } = fakeEnv()
+    const mic = await openMic(deps)
+    const a = mic.calibrate(3)
+    const b = mic.calibrate(3)
+    await tick()
+    expect(sent.map((m) => m.type)).toEqual(['calibrate-start', 'calibrate-end'])
+    worker.reply({ type: 'calibrated', noiseRms: 0.02 })
+    expect(await Promise.all([a, b])).toEqual([0.02, 0.02])
+  })
+
+  it('两次 stop 按 FIFO 对应两条 stopped', async () => {
+    const { deps, worker } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.start(() => {})
+    const p1 = mic.stop()
+    mic.start(() => {})
+    const p2 = mic.stop()
+    worker.reply({ type: 'stopped', segments: [seg(100)] })
+    worker.reply({ type: 'stopped', segments: [seg(200)] })
+    expect(await p1).toEqual([seg(100)])
+    expect(await p2).toEqual([seg(200)])
+  })
+
+  it('stop 未决时 start(cb2)：旧段不投递，新段投递，cb2 不被旧 stop 清掉', async () => {
+    const { deps, worker } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.start(() => {})
+    const p1 = mic.stop()
+    const seen: number[] = []
+    mic.start((s) => seen.push(s.medianHz))
+    worker.reply({ type: 'segment', segment: seg(111) })
+    expect(seen).toEqual([])
+    worker.reply({ type: 'stopped', segments: [] })
+    await p1
+    worker.reply({ type: 'segment', segment: seg(222) })
+    expect(seen).toEqual([222])
+  })
+
+  it('重复 stop（无新 start）返回同一个 promise', async () => {
+    const { deps, worker } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.start(() => {})
+    const p1 = mic.stop()
+    const p2 = mic.stop()
+    expect(p2).toBe(p1)
+    worker.reply({ type: 'stopped', segments: [seg(1)] })
+    expect(await p1).toEqual([seg(1)])
+  })
+
+  it('stop 未决时 Worker onerror：stop 拒绝，音轨被释放', async () => {
+    const { deps, worker, stopTrack } = fakeEnv()
+    const mic = await openMic(deps)
+    mic.start(() => {})
+    const caught = mic.stop().catch((x) => x)
+    worker.onerror?.(new Error('boom'))
+    expect(await caught).toMatchObject({ reason: 'error', message: 'Worker 出错' })
+    expect(stopTrack).toHaveBeenCalled()
+  })
+})
