@@ -11,6 +11,11 @@ export const CLICK_GAIN = 0.4
 export const NEUTRAL_COUNT_IN_PULSES = 4
 /** L4：节拍器只覆盖内容前 40% */
 export const METRONOME_L4_COVERAGE = 0.4
+/**
+ * 中性 L4 的节拍个数：固定常数，不随内容长度变化，免得泄露拍数（即拍号）。
+ * 少于最短 R 题（两小节 2/4＝4 拍），所以节拍器仍然撤掉。
+ */
+export const NEUTRAL_L4_PULSES = 3
 
 /** 一个感知拍含几个记谱单位：x/8 复合拍是附点四分＝3 个八分（FWD-6），其余 1 个 */
 export function unitsPerPulse(meter: Meter): number {
@@ -87,7 +92,7 @@ export function wrapWithMetronome(input: MetronomeWrapInput): {
       case 3:
         return false
       case 4:
-        return p.atSec < METRONOME_L4_COVERAGE * input.contentDurSec
+        return metered ? p.atSec < METRONOME_L4_COVERAGE * input.contentDurSec : i < NEUTRAL_L4_PULSES
     }
   })
   const during = kept.map((p) => click(leadInSec + p.atSec, metered && p.downbeat, clickMidi))

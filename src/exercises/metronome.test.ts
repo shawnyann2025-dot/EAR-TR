@@ -130,3 +130,32 @@ describe('metronomeBarNotes（R 轨反馈锚点）', () => {
     ])
   })
 })
+
+describe('中性 L4 不泄露拍数（修复轮 1）', () => {
+  it('neutral L4 内容中恰好 3 个点击，偏移为第 0、1、2 拍，与拍号无关', () => {
+    const cases: [Meter[], number][] = [
+      [[M24, M24], 4],
+      [[M34, M34], 6],
+      [[M44, M44], 8],
+    ]
+    for (const [bars, durSec] of cases) {
+      const r = wrap(4, 'neutral', bars, durSec)
+      expect(contentClicks(r).map((e) => e.atSec - r.contentStartSec)).toEqual([0, 1, 2])
+    }
+  })
+
+  it('6/8 与 2/4 的预备拍和网格按 bpm 90 计算', () => {
+    const r1m = wrapWithMetronome({
+      bars: [M68, M68], bpm: 90, level: 1, mode: 'metered', clickMidi: CLICK_MIDI, timbreId: 'piano', content, contentDurSec: 4,
+    })
+    expect(r1m.contentStartSec).toBeCloseTo(2 * (60 / 90), 9)
+    const r1n = wrapWithMetronome({
+      bars: [M68, M68], bpm: 90, level: 1, mode: 'neutral', clickMidi: CLICK_MIDI, timbreId: 'piano', content, contentDurSec: 4,
+    })
+    expect(r1n.contentStartSec).toBeCloseTo(4 * (60 / 90), 9)
+    const grid = pulseGrid([M68, M68], 90)
+    expect(grid).toHaveLength(4)
+    expect(grid.map((p) => p.atSec)).toEqual([0, 60 / 90, 120 / 90, 180 / 90].map((x) => expect.closeTo(x, 9)))
+    expect(grid.map((p, i) => [i, p.downbeat]).filter(([, d]) => d).map(([i]) => i)).toEqual([0, 2])
+  })
+})
