@@ -64,9 +64,10 @@ export function FeedbackPanel(props: {
       ? { degrees: ex.format.options.map((o) => o.id), correct: ex.answer.id }
       : null
   const detail = grade.detail
+  const sungCount = props.response?.kind === 'pitch' && 'sungHz' in props.response ? props.response.sungHz.length : Infinity
   const sungMarks =
     ex.answer.kind === 'pitch' && detail.kind === 'pitch' && detail.perTarget
-      ? ex.answer.targets.map((t, i) => ({ label: degreeLabel(t.degree, props.scheme, ex.resolved.key.mode), ok: !!detail.perTarget?.[i] }))
+      ? ex.answer.targets.map((t, i) => ({ label: degreeLabel(t.degree, props.scheme, ex.resolved.key.mode), ok: !!detail.perTarget?.[i], sung: i < sungCount }))
       : null
   const sangNothing = props.response?.kind === 'pitch' && 'sungHz' in props.response && props.response.sungHz.length === 0
   return (
@@ -81,7 +82,7 @@ export function FeedbackPanel(props: {
       {sungMarks && !sangNothing && (
         <div className="scale-bar sing-marks" aria-label="逐音结果">
           {sungMarks.map((m, i) => (
-            <span key={i} className="scale-cell" data-mark={m.ok ? 'correct' : 'chosen'}>{m.label}</span>
+            <span key={i} className="scale-cell" data-mark={m.ok ? 'correct' : m.sung ? 'chosen' : 'missing'}>{m.label}</span>
           ))}
         </div>
       )}

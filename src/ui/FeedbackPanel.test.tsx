@@ -66,6 +66,17 @@ describe('FeedbackPanel：唱题逐音反馈', () => {
     expect(marks).toEqual(perTarget.map((ok) => (ok ? 'correct' : 'chosen')))
   })
 
+  it('只唱了前几个音：没唱到的音标 missing', () => {
+    if (singEx.answer.kind !== 'pitch') throw new Error()
+    const n = singEx.answer.targets.length
+    expect(n).toBeGreaterThan(1)
+    render(
+      <FeedbackPanel exercise={singEx} grade={{ correct: false, detail: { kind: 'pitch', perTarget: Array(n).fill(false), centsOff: Array(n).fill(null) } }} response={{ kind: 'pitch', sungHz: [200] }} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />,
+    )
+    const marks = [...document.querySelectorAll('.sing-marks .scale-cell')].map((e) => e.getAttribute('data-mark'))
+    expect(marks).toEqual(['chosen', ...Array(n - 1).fill('missing')])
+  })
+
   it('什么都没唱：提示「没听到你唱」', () => {
     render(
       <FeedbackPanel exercise={singEx} grade={{ correct: false, detail: { kind: 'pitch', perTarget: [false], centsOff: [null] } }} response={{ kind: 'pitch', sungHz: [] }} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />,

@@ -203,3 +203,25 @@ describe('AnswerArea：唱模态目标音级显示', () => {
     expect(container.querySelector('.targets')?.textContent).toBe(expected)
   })
 })
+
+describe('AnswerArea：唱题路由', () => {
+  const sing = generate({ kpId: 'degree:major:mi', modality: 'sing', track: 'T', contextLevel: 1, variationLevel: 1, difficultyStep: 3, seed: 2, segment: 'focus' }, c)
+  const mic = { ensure: async () => {}, start: async () => {}, stop: async () => [] }
+  const render1 = (singProp?: { mode: 'detect' | 'self'; mic: typeof mic | null }) =>
+    render(<AnswerArea exercise={sing} scheme="solfege" phase="answering" playback={null} clock={{ now: () => 0, latencySec: 0 }} schedule={() => () => {}} onPlayTarget={vi.fn()} onResponse={vi.fn()} sing={singProp} />)
+
+  it('detect + mic：检测控件', async () => {
+    render1({ mode: 'detect', mic })
+    expect(screen.getByRole('button', { name: '唱完了' })).toBeTruthy()
+    await act(async () => {})
+  })
+  it('self：自评控件', () => {
+    render1({ mode: 'self', mic })
+    expect(screen.getByRole('button', { name: '唱对了' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '唱完了' })).toBeNull()
+  })
+  it('detect 但 mic 为 null：自评控件', () => {
+    render1({ mode: 'detect', mic: null })
+    expect(screen.getByRole('button', { name: '唱对了' })).toBeTruthy()
+  })
+})
