@@ -122,6 +122,7 @@ export interface ContentResult {
     /**
      * 题目内容的时刻 0 对应小节网格里的第几个感知拍（默认 0）。
      * 从小节中间开始的内容（找 beat 1、弱起）去掉前面的空拍，让预备拍不落在第一拍上。
+     * 只用于中性节拍器。
      * 生成器负责把自己的起音与答案一起前移 startPulse 个感知拍。
      */
     startPulse?: number

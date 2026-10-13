@@ -13,11 +13,11 @@ export const NEUTRAL_COUNT_IN_PULSES = 4
 export const METRONOME_L4_COVERAGE = 0.4
 /**
  * 中性 L4 的节拍个数：固定常数，不随内容长度变化，免得泄露拍数（即拍号）。
- * 少于最短 R 题（两小节 2/4＝4 拍），所以节拍器仍然撤掉。
+ * 少于最短的中性题（startPulse 之后的内容网格至少 4 个感知拍），所以节拍器总是撤走。
  */
 export const NEUTRAL_L4_PULSES = 3
-/** 中性 L2 的节拍个数：固定个数、逐拍都响——没有步长，就不会与小节线对齐；比 L4 的 3 个多，保持逐级撤走 */
-export const NEUTRAL_L2_PULSES = 6
+/** 中性 L2 的节拍个数：固定个数、逐拍都响——没有步长，不会与小节线对齐；与 L4 相同，二者在中性模式下等价；少于最短的中性题（4 个感知拍），所以总在撤走 */
+export const NEUTRAL_L2_PULSES = 3
 
 /** 一个感知拍含几个记谱单位：x/8 复合拍是附点四分＝3 个八分（FWD-6），其余 1 个 */
 export function unitsPerPulse(meter: Meter): number {
@@ -90,7 +90,13 @@ export function wrapWithMetronome(input: MetronomeWrapInput): {
   if (!Number.isInteger(start) || start < 0 || start >= full.length) {
     throw new Error(`startPulse 必须是 [0, ${full.length}) 内的整数：${start}`)
   }
+  if (metered && start > 0) {
+    throw new Error('startPulse 只用于中性节拍器：节拍（metered）预备拍之后从小节中间开始，脉冲会磕绊')
+  }
   const grid = full.slice(start).map((p) => ({ atSec: p.atSec - start * pulseSec, downbeat: p.downbeat }))
+  if (!metered && grid.length <= NEUTRAL_L2_PULSES) {
+    throw new Error(`中性节拍器的题目至少需要 ${NEUTRAL_L2_PULSES + 1} 个感知拍，实际 ${grid.length} 个`)
+  }
   const kept = grid.filter((p, i) => {
     switch (level) {
       case 0:
