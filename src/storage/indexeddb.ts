@@ -6,6 +6,7 @@ import {
   ATTEMPT_CAP,
   SCHEMA_VERSION,
   StorageCorruptError,
+  StorageUnavailableError,
   type AttemptAggregate,
   type ExportBundle,
   type GateRecord,
@@ -51,24 +52,32 @@ function open(factory: IDBFactory, name: string, version: number | undefined): P
   return new Promise((resolve, reject) => {
     const r = version === undefined ? factory.open(name) : factory.open(name, version)
     r.onupgradeneeded = (e) => upgrade(r.result, e.oldVersion)
-    r.onsuccess = () => resolve(r.result)
+    r.onsuccess = () => {
+      const db = r.result
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
     r.onerror = () => reject(r.error)
+    r.onblocked = () => reject(new Error('另一个标签页占用了旧版本数据库，请关闭其他标签页后重试'))
   })
 }
 
-/** 尽力读出全部数据（不论版本），供损坏时导出副本 */
+/** 尽力读出全部数据（不论版本），供损坏时导出副本；每个仓库为 [键, 值] 对（保留 MasteryKey 等外置键） */
 async function rawDump(factory: IDBFactory, name: string): Promise<string> {
+  let db: IDBDatabase | undefined
   try {
-    const db = await open(factory, name, undefined)
-    const out: Record<string, unknown[]> = {}
+    db = await open(factory, name, undefined)
+    const out: Record<string, [IDBValidKey, unknown][]> = {}
     for (const store of Array.from(db.objectStoreNames)) {
-      const tx = db.transaction(store, 'readonly')
-      out[store] = await req(tx.objectStore(store).getAll())
+      const os = db.transaction(store, 'readonly').objectStore(store)
+      const [keys, values] = await Promise.all([req(os.getAllKeys()), req(os.getAll())])
+      out[store] = keys.map((k, i) => [k, values[i]])
     }
-    db.close()
     return JSON.stringify(out)
   } catch (e) {
     return JSON.stringify({ error: String(e) })
+  } finally {
+    db?.close()
   }
 }
 
@@ -121,6 +130,13 @@ class IndexedDbRepository implements Repository {
    * 避免事务在微任务间隙自动提交（TransactionInactiveError）。
    */
   appendAttempt(a: AttemptRecord): Promise<void> {
+    try {
+      return this.appendAttemptTx(a)
+    } catch (e) {
+      return Promise.reject(e)
+    }
+  }
+  private appendAttemptTx(a: AttemptRecord): Promise<void> {
     const tx = this.tx(['attempts', 'attemptAggregates'], 'readwrite')
     const finished = done(tx)
     const attempts = tx.objectStore('attempts')
@@ -193,8 +209,16 @@ class IndexedDbRepository implements Repository {
     }
   }
   importAll(bundle: ExportBundle): Promise<void> {
+    let tx: IDBTransaction
+    try {
+      tx = this.tx([...STORES], 'readwrite')
+    } catch (e) {
+      return Promise.reject(e)
+    }
+    return this.importInto(tx, bundle)
+  }
+  private importInto(tx: IDBTransaction, bundle: ExportBundle): Promise<void> {
     // 单一事务：清空并写入全部仓库；任何一步失败整个事务回滚，不改现有数据
-    const tx = this.tx([...STORES], 'readwrite')
     const finished = done(tx)
     try {
       for (const s of STORES) tx.objectStore(s).clear()
@@ -231,13 +255,18 @@ class IndexedDbRepository implements Repository {
 export async function openIndexedDbRepository(
   opts: { name?: string; attemptCap?: number; factory?: IDBFactory } = {},
 ): Promise<Repository> {
-  const factory = opts.factory ?? globalThis.indexedDB
+  const factory = opts.factory ?? (globalThis as { indexedDB?: IDBFactory }).indexedDB
+  if (!factory) throw new StorageUnavailableError('此环境没有 IndexedDB')
   const name = opts.name ?? DB_NAME
   let db: IDBDatabase
   try {
     db = await open(factory, name, SCHEMA_VERSION)
   } catch (e) {
-    throw new StorageCorruptError(`无法打开本地数据库：${String(e)}`, await rawDump(factory, name))
+    // 仅「版本高于本程序」算数据问题；其余（隐私模式、被占用、配额等）视为存储不可用，由运行时降级到内存
+    if ((e as { name?: string } | null)?.name === 'VersionError') {
+      throw new StorageCorruptError(`无法打开本地数据库：${String(e)}`, await rawDump(factory, name))
+    }
+    throw new StorageUnavailableError(`本地数据库不可用：${String(e)}`)
   }
   const missing = STORES.filter((s) => !db.objectStoreNames.contains(s))
   if (missing.length > 0) {
@@ -245,7 +274,13 @@ export async function openIndexedDbRepository(
     throw new StorageCorruptError(`本地数据库缺少仓库：${missing.join('、')}`, await rawDump(factory, name))
   }
   const repo = new IndexedDbRepository(db, opts.attemptCap ?? ATTEMPT_CAP)
-  const profile = await req(db.transaction('profile', 'readonly').objectStore('profile').get(PROFILE_KEY))
+  let profile: unknown
+  try {
+    profile = await req(db.transaction('profile', 'readonly').objectStore('profile').get(PROFILE_KEY))
+  } catch (e) {
+    db.close()
+    throw e
+  }
   if (profile !== undefined && !isProfile(profile)) {
     db.close()
     throw new StorageCorruptError('本地数据库里的 Profile 结构不对', await rawDump(factory, name))

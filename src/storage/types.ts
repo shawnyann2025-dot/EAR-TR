@@ -70,3 +70,11 @@ export class StorageImportError extends Error {
     this.name = 'StorageImportError'
   }
 }
+
+/** 本地存储不可用（无 IndexedDB、隐私模式、被占用等）：运行时据此降级到内存仓库（主 spec §12） */
+export class StorageUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StorageUnavailableError'
+  }
+}
