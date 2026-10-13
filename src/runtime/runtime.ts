@@ -139,8 +139,8 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         return write(() => repo.putSession(effect.record))
       case 'advancePhase': {
         const cur = snapshot.profile ?? (await ensureProfileNow())
-        // 已在目标阶段（例如被杀掉的会话重新结算）：不重复保存，也不重复记关卡
-        if (cur.phaseId === effect.to) return
+        // 只在仍处于 from 阶段时推进：重复结束不重复写关卡记录，也绝不把已更靠后的阶段拉回去
+        if (cur.phaseId !== effect.from) return
         const p = { ...cur, phaseId: effect.to }
         set({ profile: p })
         await write(() => repo.saveProfile(p))
