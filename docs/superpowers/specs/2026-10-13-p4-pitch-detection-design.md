@@ -31,9 +31,12 @@
 ### 3.2 有声判定与稳定段（`segments.ts`）
 
 - 有声帧：`f0Hz !== null`、`aperiodicity ≤ 0.15`、`rms ≥ VOICED_RMS_FACTOR × noiseRms`（`VOICED_RMS_FACTOR = 2`；`noiseRms` 来自 3 秒噪声基线，未知时取 0）。
-- 稳定段：连续有声帧，帧间音高跳变 ≤ `SEGMENT_JUMP_CENTS = 80`，段内相对段中位数的偏差 ≤ `SEGMENT_JITTER_CENTS = 30`，时长 ≥ `MIN_SEGMENT_SEC = 0.15`。
-- 段边界：无声持续 ≥ `GAP_SEC = 0.06`，或音高跳变 > 80 音分。
-- 增量式：`createSegmenter(opts)` 返回 `{ push(frame: PitchFrame, atSec: number): void; segments(): Segment[]; flush(): Segment[] }`，`Segment = { startSec; endSec; medianHz }`。
+- 段（连续有声帧组成的「运行」，收尾时再取稳定核）：
+  - 八度折叠：帧与运行原始中位数相差整数个八度（k≠0）且偏差 ≤ `OCTAVE_FOLD_TOLERANCE_CENTS = 35` 时视为同一音高类（真实 YIN 八度误判落在 2× 附近几音分内；须 < 50，以免吞掉 do→ti 的 1125 音分）。收尾时以运行原始中位数所在八度为准折叠全部帧，故起音处少量 2f0 帧不会改变八度。
+  - 切段：折叠后偏离运行中位数 > `SEGMENT_JUMP_CENTS = 80` 的帧先进入待定列表；待定帧持续 ≥ `SPLIT_PERSIST_SEC = 0.09` 才收尾当前运行（不含待定帧）并以待定帧开新运行；其间若来一帧不偏离的帧，待定帧并回运行（颤音峰或孤立误判）。无声持续 ≥ `GAP_SEC = 0.06` 也收尾（待定帧先并入）。
+  - 平滑：收尾时把折叠后的帧换成相对中位数的音分，做窗长 `SMOOTH_SEC = 0.18`（约一个颤音周期）的居中滑动平均（边缘截断），使宽颤音不丢音。
+  - 稳定核：平滑值中最长的连续窗口，要求极差 ≤ 2 × `SEGMENT_JITTER_CENTS`（30）且最小二乘斜率 ≤ `MAX_DRIFT_CENTS_PER_SEC = 120`；这样滑入、下垂、收尾下滑被修剪，慢滑音不成段。核长 × hop ≥ `MIN_SEGMENT_SEC = 0.15` 才输出，`startSec`/`endSec` 取核首帧/末帧 + hop，`medianHz` 取核内折叠后原始 Hz 的中位数。
+- 增量式：`createSegmenter(opts)` 返回 `{ push(frame: PitchFrame, atSec: number): Segment | null; flush(): Segment | null; segments(): Segment[] }`，`Segment = { startSec; endSec; medianHz }`。`push`/`flush` 在一段收尾且合格时返回该段，否则 null；`segments()` 返回迄今全部合格段。
 
 ### 3.3 判定（`judge.ts`）
 

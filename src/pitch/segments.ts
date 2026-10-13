@@ -6,13 +6,14 @@ export const SEGMENT_JUMP_CENTS = 80
 export const SEGMENT_JITTER_CENTS = 30
 export const MIN_SEGMENT_SEC = 0.15
 export const GAP_SEC = 0.06
-/** 段内落在中位数 ±SEGMENT_JITTER_CENTS 内的帧至少占这么多 */
-export const STABLE_FRACTION = 0.8
-/**
- * 文档性常量：与当前段中位数相差整数个八度（±SEGMENT_JUMP_CENTS 内）的有声帧，
- * 先折回该八度再计入当前段，不切段。真实人声二次谐波强时 YIN 偶尔单帧报 2f0 或 f0/2。
- */
-export const OCTAVE_FOLD_IN_SEGMENT = true
+/** 真实 YIN 八度误判落在恰好 2× 附近几音分内；须小于 1200 − (1100+50) = 50，才不吞掉 do→ti（+25 音分） */
+export const OCTAVE_FOLD_TOLERANCE_CENTS = 35
+/** 稳定性判断前的音高平滑窗口，约一个颤音周期 */
+export const SMOOTH_SEC = 0.18
+/** 偏离中位数 >SEGMENT_JUMP_CENTS 的帧须持续这么久才切段，更短的视为颤音峰或孤立误判 */
+export const SPLIT_PERSIST_SEC = 0.09
+/** 稳定核内平滑音高的最大线性漂移（音分/秒），超过视为滑音 */
+export const MAX_DRIFT_CENTS_PER_SEC = 120
 
 export interface Segment {
   startSec: number
@@ -26,6 +27,14 @@ export function isVoiced(f: PitchFrame, noiseRms: number): boolean {
 
 const cents = (a: number, b: number) => 1200 * Math.log2(a / b)
 
+/** 若 hz 与 ref 相差整数个八度（±OCTAVE_FOLD_TOLERANCE_CENTS），折到 ref 所在八度 */
+function foldTo(hz: number, ref: number): number {
+  const c = cents(hz, ref)
+  const k = Math.round(c / 1200)
+  if (k !== 0 && Math.abs(c - 1200 * k) <= OCTAVE_FOLD_TOLERANCE_CENTS) return hz / Math.pow(2, k)
+  return hz
+}
+
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b)
   const m = s.length >> 1
@@ -38,55 +47,121 @@ export interface Segmenter {
   segments(): Segment[]
 }
 
+interface Fr {
+  atSec: number
+  hz: number
+}
+
 export function createSegmenter(opts: { noiseRms?: number; hopSec?: number } = {}): Segmenter {
   const noiseRms = opts.noiseRms ?? 0
   const hopSec = opts.hopSec ?? HOP_SIZE / SAMPLE_RATE
-  let run: { atSec: number; hz: number }[] = []
+  let run: Fr[] = []
+  let pending: Fr[] = []
   let lastVoicedAt = -Infinity
   const done: Segment[] = []
 
-  const close = (): Segment | null => {
-    const frames = run
-    run = []
-    if (frames.length === 0) return null
-    const m = median(frames.map((f) => f.hz))
-    const stable = frames.filter((f) => Math.abs(cents(f.hz, m)) <= SEGMENT_JITTER_CENTS)
-    if (stable.length < STABLE_FRACTION * frames.length) return null
-    if (stable.length * hopSec < MIN_SEGMENT_SEC - 1e-9) return null
+  const emit = (frames: Fr[]): Segment | null => {
+    const n = frames.length
+    if (n === 0) return null
+    // 八度折叠：以原始中位数所在八度为准
+    const ref = median(frames.map((f) => f.hz))
+    const hz = frames.map((f) => foldTo(f.hz, ref))
+    const med = median(hz)
+    // 平滑（居中滑动平均，边缘截断）
+    const w = Math.max(1, Math.round(SMOOTH_SEC / hopSec))
+    const half = w >> 1
+    const raw = hz.map((h) => cents(h, med))
+    const pre = [0]
+    for (const c of raw) pre.push(pre[pre.length - 1] + c)
+    const sm: number[] = []
+    for (let i = 0; i < n; i++) {
+      const lo = Math.max(0, i - half)
+      const hi = Math.min(n - 1, i + half)
+      sm.push((pre[hi + 1] - pre[lo]) / (hi - lo + 1))
+    }
+    // 最长稳定核：极差 ≤ 2×抖动 且 最小二乘斜率 ≤ 漂移上限
+    const ps = [0]
+    const pts = [0]
+    for (let i = 0; i < n; i++) {
+      ps.push(ps[i] + sm[i])
+      pts.push(pts[i] + i * hopSec * sm[i])
+    }
+    let bestI = -1
+    let bestLen = 0
+    for (let i = 0; i < n; i++) {
+      let mn = Infinity
+      let mx = -Infinity
+      for (let j = i; j < n; j++) {
+        mn = Math.min(mn, sm[j])
+        mx = Math.max(mx, sm[j])
+        if (mx - mn > 2 * SEGMENT_JITTER_CENTS) break
+        const len = j - i + 1
+        if (len <= bestLen) continue
+        const sumS = ps[j + 1] - ps[i]
+        const sumTS = pts[j + 1] - pts[i]
+        // t = k·hopSec, k = i..j
+        const sumT = hopSec * ((i + j) * len) / 2
+        let sumTT = 0
+        for (let k = i; k <= j; k++) sumTT += k * hopSec * k * hopSec
+        const den = len * sumTT - sumT * sumT
+        const slope = den > 0 ? (len * sumTS - sumT * sumS) / den : 0
+        if (Math.abs(slope) <= MAX_DRIFT_CENTS_PER_SEC) {
+          bestI = i
+          bestLen = len
+        }
+      }
+    }
+    if (bestLen * hopSec < MIN_SEGMENT_SEC - 1e-9) return null
     const seg: Segment = {
-      startSec: frames[0].atSec,
-      endSec: frames[frames.length - 1].atSec + hopSec,
-      medianHz: median(stable.map((f) => f.hz)),
+      startSec: frames[bestI].atSec,
+      endSec: frames[bestI + bestLen - 1].atSec + hopSec,
+      medianHz: median(hz.slice(bestI, bestI + bestLen)),
     }
     done.push(seg)
     return seg
   }
 
+  const closeRun = (): Segment | null => {
+    run = run.concat(pending)
+    pending = []
+    const frames = run
+    run = []
+    return emit(frames)
+  }
+
   return {
     push(frame, atSec) {
       if (!isVoiced(frame, noiseRms)) {
-        if (run.length > 0 && atSec - lastVoicedAt >= GAP_SEC - 1e-9) return close()
+        if ((run.length > 0 || pending.length > 0) && atSec - lastVoicedAt >= GAP_SEC - 1e-9) return closeRun()
         return null
       }
-      let hz = frame.f0Hz as number
+      const fr: Fr = { atSec, hz: frame.f0Hz as number }
       let closed: Segment | null = null
-      if (run.length > 0) {
-        const m = median(run.map((f) => f.hz))
-        let c = cents(hz, m)
-        if (Math.abs(c) > SEGMENT_JUMP_CENTS) {
-          const k = Math.round(c / 1200)
-          if (k !== 0 && Math.abs(c - 1200 * k) <= SEGMENT_JUMP_CENTS) {
-            hz = hz / Math.pow(2, k)
-            c = cents(hz, m)
-          }
-        }
-        if (Math.abs(c) > SEGMENT_JUMP_CENTS || atSec - lastVoicedAt >= GAP_SEC - 1e-9) closed = close()
+      if (run.length > 0 || pending.length > 0) {
+        if (atSec - lastVoicedAt >= GAP_SEC - 1e-9) closed = closeRun()
       }
-      run.push({ atSec, hz })
       lastVoicedAt = atSec
+      if (run.length === 0) {
+        run.push(fr)
+        return closed
+      }
+      const m = median(run.map((f) => f.hz))
+      const dev = Math.abs(cents(foldTo(fr.hz, m), m))
+      if (dev > SEGMENT_JUMP_CENTS) {
+        pending.push(fr)
+        if (pending[pending.length - 1].atSec - pending[0].atSec + hopSec >= SPLIT_PERSIST_SEC - 1e-9) {
+          const frames = run
+          run = pending
+          pending = []
+          closed = emit(frames)
+        }
+      } else {
+        run = run.concat(pending, [fr])
+        pending = []
+      }
       return closed
     },
-    flush: close,
+    flush: closeRun,
     segments: () => [...done],
   }
 }

@@ -32,6 +32,25 @@ export function tone(
   return out
 }
 
+/** 相位连续的基频轨迹：hzAt(t) 给出 t 秒处的基频（可含滑音、颤音） */
+export function track(hzAt: (tSec: number) => number, durSec: number, opts: { sampleRate?: number; amp?: number } = {}): Float32Array {
+  const sr = opts.sampleRate ?? SAMPLE_RATE
+  const amp = opts.amp ?? 0.5
+  const n = Math.round(durSec * sr)
+  const out = new Float32Array(n)
+  let phase = 0
+  for (let i = 0; i < n; i++) {
+    phase += hzAt(i / sr) / sr
+    out[i] = amp * Math.sin(2 * Math.PI * phase)
+  }
+  return out
+}
+
+/** 相位连续的指数（线性音分）滑音 */
+export function glide(fromHz: number, toHz: number, durSec: number, opts: { sampleRate?: number; amp?: number } = {}): Float32Array {
+  return track((t) => fromHz * Math.pow(toHz / fromHz, t / durSec), durSec, opts)
+}
+
 export function silence(durSec: number, sampleRate: number = SAMPLE_RATE): Float32Array {
   return new Float32Array(Math.round(durSec * sampleRate))
 }
