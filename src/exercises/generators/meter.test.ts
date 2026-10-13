@@ -102,6 +102,16 @@ describe('混合拍子', () => {
     expect(seen.size).toBeGreaterThan(1)
   })
 
+  it('听辨选项只在同一组拍号的不同顺序之间选：恰好 2 个，同拍号集合', () => {
+    for (const seed of SEEDS) {
+      const r = MIXED_METER_GENERATORS.recognize(generatorInput('rhythm:mixed-meter', 'recognize', { seed, step: 5 }))
+      if (r.answer.kind !== 'choice' || r.format.kind !== 'choice') throw new Error('格式错')
+      const sorted = (id: string) => id.split('+').sort()
+      expect(r.format.options).toHaveLength(2)
+      for (const o of r.format.options) expect(sorted(o.id)).toEqual(sorted(r.answer.id))
+    }
+  })
+
   it('打拍：答案是各小节起点', () => {
     const input = generatorInput('rhythm:mixed-meter', 'sing', { seed: 6 })
     const r = MIXED_METER_GENERATORS.sing(input)

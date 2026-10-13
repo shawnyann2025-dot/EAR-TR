@@ -127,11 +127,16 @@ function mixedPassage(input: GeneratorInput) {
   return { combo, meters, passage: filledPassage(meters, input) }
 }
 
+function sameMeters(a: readonly MeterId[], b: readonly MeterId[]): boolean {
+  return [...a].sort().join() === [...b].sort().join()
+}
+
 const recognizeMixed: Generator = (input): ContentResult => {
   const { combo, passage } = mixedPassage(input)
+  // 只在同一组拍号的不同顺序之间选——各选项总长相同，不能靠长度排除
   const options = pickOptions(
     combo.id,
-    MIXED_COMBOS.map((m) => m.id),
+    MIXED_COMBOS.filter((m) => sameMeters(m.meters, combo.meters)).map((m) => m.id),
     difficultyParams(input.spec.difficultyStep).recognizeOptionCount,
     input.rng,
   )
