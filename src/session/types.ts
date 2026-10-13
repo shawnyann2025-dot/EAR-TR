@@ -103,7 +103,7 @@ export type SessionEvent =
   | { type: 'endEarly' }
 
 export type SessionEffect =
-  | { type: 'play'; plan: PlaybackPlan }
+  | { type: 'play'; plan: PlaybackPlan; contentStartSec: number }
   | { type: 'stopAudio' }
   | { type: 'saveAttempt'; attempt: AttemptRecord }
   | { type: 'saveMastery'; key: MasteryKey; state: MasteryState }

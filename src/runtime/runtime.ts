@@ -1,6 +1,6 @@
 import type { Curriculum } from '../curriculum/curriculum'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
-import type { PlaybackPlan } from '../music/playback'
+import type { PlaybackPlan, PlayOptions } from '../music/playback'
 import type { MasteryState } from '../scheduling/mastery'
 import { buildSessionPlan } from '../scheduling/scheduler'
 import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
@@ -10,7 +10,7 @@ import { parseBundle } from '../storage/bundle'
 import { SCHEMA_VERSION, type Profile, type Repository } from '../storage/types'
 
 export interface AudioPort {
-  play(plan: PlaybackPlan): { startSec: number; endSec: number }
+  play(plan: PlaybackPlan, opts?: PlayOptions): { startSec: number; endSec: number }
   stopAll(): void
   readonly currentTime: number
 }
@@ -39,6 +39,8 @@ export interface RuntimeSnapshot {
   storageError: string | null
   /** 最近一次导入前自动导出的备份（JSON 字符串）；未导入过为 null */
   lastBackup: string | null
+  /** 当前题的播放起点与内容起点（打拍零点用）；无播放时为 null */
+  playback: { startSec: number; contentStartSec: number } | null
 }
 
 export interface Runtime {
@@ -60,7 +62,7 @@ export interface Runtime {
 /** 薄壳（P-3 spec §5）：持有状态与掌握度副本，按顺序执行状态机的副作用 */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const { repo, audio, timer, curriculum } = deps
-  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null }
+  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null, playback: null }
   let mastery = new Map<MasteryKey, MasteryState>()
   let cancelTimer: (() => void) | null = null
   let queue: Promise<void> = Promise.resolve()
@@ -119,7 +121,12 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     switch (effect.type) {
       case 'play': {
         cancelTimer?.()
-        const { endSec } = audio.play(effect.plan)
+        // 先清空：play 若抛错，不能残留上一道题的播放信息
+        set({ playback: null })
+        // 先停掉上一段（UI 的重听/慢放），免得叠在新题上
+        audio.stopAll()
+        const { startSec, endSec } = audio.play(effect.plan, { cutContextAtSec: effect.contentStartSec })
+        set({ playback: { startSec, contentStartSec: effect.contentStartSec } })
         cancelTimer = timer.after(Math.max(0, endSec - audio.currentTime), () => {
           cancelTimer = null
           dispatch({ type: 'contentPlayed' }).catch((e) => set({ lastError: describe(e) }))
@@ -130,6 +137,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         cancelTimer?.()
         cancelTimer = null
         audio.stopAll()
+        set({ playback: null })
         return
       case 'saveMastery':
         return write(() => repo.putMastery(effect.key, effect.state))
@@ -255,7 +263,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       await run({ type: 'stopAudio' }) // 有进行中的会话时停播并取消计时
       await repo.importAll(bundle)
       mastery = new Map()
-      set({ profile: null, session: null, lastBackup: backup })
+      set({ profile: null, session: null, lastBackup: backup, playback: null })
       await ensureProfileNow()
       notify()
     }),

@@ -234,7 +234,7 @@ interface Repository {
 - 持有 `SessionState` 与掌握度内存副本；`dispatch(event)` 调 `reduce`，按顺序执行副作用（播放、落盘、结束回调），然后通知订阅者。所有会改状态的操作经同一条队列串行执行。
 - **快照**：`getSnapshot()` 里 `storageError` 是独立字段，专供「只读警告」展示，与 `lastError` 分开。
 - **续起**：中断后界面用 `dispatch({type:'start'})` 恢复，不再调 `startToday`。
-- **播放**：`audio.play(plan)`，在内容播完时派发 `contentPlayed`（按 `plan.totalDurSec` 与 `AudioContext` 时钟计时）。
+- **播放**：先清空快照的 `playback`，再 `audio.stopAll()`（停掉上一段，如界面的重听或慢放，免得叠在新题上），然后 `audio.play(plan)`，并在内容播完时派发 `contentPlayed`（按 `plan.totalDurSec` 与 `AudioContext` 时钟计时）。
 - **落盘失败**：重试一次；仍失败则把运行时切到「只读警告」状态，界面提示「进度暂时无法保存，可导出备份」，练习不中断。
 - **出题抛错**：理论上已被集成守卫排除；若发生，跳过该计划题并记一条错误日志，不写作答，不让整场会话崩掉。
 
@@ -248,7 +248,7 @@ P-3a 用假音频（记录调用、可手动推进时间）与内存存储测试
 
 | 页面 | 内容 |
 |---|---|
-| 首次使用 | 如实说明周期（约 6–9 个月，主 spec §8.5）；建议戴耳机；约 5 分钟分级测试（主 spec §7.7，`placement.ts` 的探针，每个探针出一道 recognize 题，`contextLevel` 0、`variationLevel` 0、`difficultyStep` 0）；分级结果写入 Profile 的 `phaseId`；音域测定占位（P-4） |
+| 首次使用 | 如实说明周期（约 6–9 个月，主 spec §8.5）；建议戴耳机；约 5 分钟分级测试（主 spec §7.7，`placement.ts` 的探针，每个探针出一道 recognize 题，`contextLevel` 0、`variationLevel` 0、`difficultyStep` 0；用户点「我听完了」后才呈现探针，出题或落盘失败时提供「重试」）；分级结果写入 Profile 的 `phaseId`；音域测定占位（P-4） |
 | 首页 | 开始或继续今天的主线会话；练完后显示「再练一场」；顶部显示当前阶段 |
 | 练习页 | 上方：题干、重听；**答题控件全部在屏幕下 1/3**（主 spec §11）；控件按作答格式切换（6.2） |
 | 今日总结 | 正确率、各轨道题数、关卡还差哪些（阻塞的 key 数）、实战关是否达标、是否升阶段 |
@@ -266,7 +266,7 @@ P-3a 用假音频（记录调用、可手动推进时间）与内存存储测试
 ### 6.3 反馈（主 spec §6.4）
 
 - 答对：简短确认，不打断节奏，进入下一题。
-- 答错：自动播放 `feedback.replay`；T 轨在音阶条上同时标出「你选的」和「正确的」；「慢速再听」播放 `feedback.slow`；会话结束页提供「重练刚才错的这组」（3.8）。
+- 答错：自动播放 `feedback.replay`；T 轨在音阶条上同时标出「你选的」和「正确的」；`pitch` 题答错时显示「再听一遍目标音，对照自己唱的」（自评题没有可显示的正确答案）；「慢速再听」播放 `feedback.slow`；会话结束页提供「重练刚才错的这组」（3.8）。
 
 ### 6.4 显示文案表（P-2b §14）
 
@@ -287,6 +287,7 @@ P-3a 用假音频（记录调用、可手动推进时间）与内存存储测试
 - 第一次点击时创建或恢复 `AudioContext`（iOS 要求用户手势）。
 - 练习中申请 Wake Lock，页面隐藏时释放、恢复时重新申请。
 - 监听 `visibilitychange` 与 `AudioContext` 的 `statechange`：页面隐藏或音频被挂起 → 派发 `interrupted`。
+- **播放前先停**：运行时的 `play` 副作用先停掉全部音频、并清空快照 `playback`，再播新计划（见 §5）。
 - **FWD-5**：音频层在目标音起音前淡出仍在发声的语境声部（`AudioEngine` 增加「在某时刻淡出其余声部」的能力，不动 music 层的 `GAP_SEC`）。
 
 ### 6.7 只有用户能做的验收（P-3b 合入前）

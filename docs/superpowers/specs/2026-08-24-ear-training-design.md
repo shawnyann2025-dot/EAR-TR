@@ -637,6 +637,8 @@ AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚�
 
 此项在 T6（和声/旋律小调）进入课程前必须解决，否则该阶段的显示是错的。
 
+**状态（P-3b）**：显示层 `src/ui/labels.ts` 在小调中把 `le` 显示为 `si`（数字 `♯5`、级数 `♯^5`）；底层音级 id 不变。
+
 ---
 
 ## 16. P-1 实施后的修订与前向约束
@@ -681,6 +683,7 @@ P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。�
 **FWD-5 · `GAP_SEC` 与 `releaseSec` 跨层不协调（影响 P-3）**
 `tonalContext.ts` 的 `GAP_SEC = 0.35` 在 music 层选定，而释音尾巴 `releaseSec` 定义在 audio 层——按 §3.2 的分层契约，music 层不可能知道它。实测后果：`strings` 音色（`releaseSec = 0.45`）下，L0 终止式末尾主和弦的 `stopSec` = 2.10，而目标音在 `leadInSec` = 2.0 起音，**尾音溢入目标音 0.10 秒**。其余三种音色不溢出。
 **修法**：不要回头调 `GAP_SEC`——那会让 music 层隐性耦合 audio 常量，破坏 §3.2 的边界。P-3 若发现语境撤除不干净，正解是在 audio 层做「目标音起音前淡出残留声部」。
+**状态（P-3b，已关闭）**：`AudioEngine.play` 的 `cutContextAtSec`（= `contentStartSec`）把本该在目标音前结束的语境声部的释音截到目标音起点；跨过该点的持续低音不受影响。music 层的 `GAP_SEC` 未动。
 
 **FWD-6 · `beatUnit` 的记谱约定靠测试而非类型钉住（影响 P-2 的 R6）**
 `bpm` 的语义是「每分钟多少个 `beatUnit` 拍」，算式自洽全靠一条约定：`beatsPerBar` 必须填**记谱拍数**而非**感知拍数**。6/8 拍应填 `{ beatsPerBar: 6, beatUnit: 8 }`（六个八分音符），而非 `{ beatsPerBar: 3, beatUnit: 8 }`（指挥数的三个附点四分音符）。填错会让时值计算静默出错。

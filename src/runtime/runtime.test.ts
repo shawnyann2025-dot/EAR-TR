@@ -20,7 +20,7 @@ function fakes() {
   let stopped = 0
   const audio: AudioPort = {
     currentTime: 0,
-    play: (plan) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
+    play: (plan, _opts) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
     stopAll: () => { stopped++ },
   }
   const pending: (() => void)[] = []
@@ -117,8 +117,9 @@ describe('createRuntime', () => {
     const rt = createRuntime(d)
     await rt.startToday()
     const first = rt.getSnapshot().session!.current!.exercise
+    const stoppedBefore = d.stoppedCount()
     await rt.dispatch({ type: 'interrupted' })
-    expect(d.stoppedCount()).toBe(1)
+    expect(d.stoppedCount()).toBe(stoppedBefore + 1)
     expect(rt.getSnapshot().session?.phase).toBe('idle')
     await rt.dispatch({ type: 'start' })
     expect(rt.getSnapshot().session?.current?.exercise).toEqual(first)
@@ -431,5 +432,61 @@ describe('Profile 与导入导出', () => {
     expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
     expect(rt.getSnapshot().session).toBe(session)
     expect(rt.getSnapshot().lastBackup).toBeNull()
+  })
+})
+
+describe('播放前先停', () => {
+  it('每次 play 之前都调用 stopAll', async () => {
+    const d = deps(new MemoryRepository())
+    const order: string[] = []
+    const play = d.audio.play
+    const stop = d.audio.stopAll
+    d.audio.play = (plan, opts) => { order.push('play'); return play(plan, opts) }
+    d.audio.stopAll = () => { order.push('stop'); stop() }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    await playThrough(rt, d.flush, 3)
+    expect(order.filter((x) => x === 'play').length).toBeGreaterThanOrEqual(3)
+    order.forEach((x, i) => { if (x === 'play') expect(order[i - 1]).toBe('stop') })
+  })
+})
+
+describe('播放信息', () => {
+  it('play 时把 cutContextAtSec 交给音频，并在快照里给出 playback；中断后清空', async () => {
+    const d = deps(new MemoryRepository())
+    const optsSeen: unknown[] = []
+    const play = d.audio.play
+    d.audio.play = (plan, opts) => {
+      optsSeen.push(opts)
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    const s = rt.getSnapshot()
+    const csec = s.session!.current!.exercise.contentStartSec
+    expect(optsSeen.at(-1)).toEqual({ cutContextAtSec: csec })
+    expect(s.playback).toEqual({ startSec: 0, contentStartSec: csec })
+    await rt.dispatch({ type: 'interrupted' })
+    expect(rt.getSnapshot().playback).toBeNull()
+  })
+
+  it("audio.play 抛错时 playback 为 null，不残留上一道题的值，错误进 lastError", async () => {
+    const d = deps(new MemoryRepository())
+    const play = d.audio.play
+    let calls = 0
+    d.audio.play = (plan, opts) => {
+      if (++calls >= 2) throw new Error("boom")
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    expect(rt.getSnapshot().playback).not.toBeNull()
+    await d.flush()
+    const s = rt.getSnapshot().session!
+    await rt.dispatch({ type: "answer", response: answerAsResponse(s.current!.exercise.answer), latencyMs: 500 })
+    await rt.dispatch({ type: "next" })
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(rt.getSnapshot().playback).toBeNull()
+    expect(rt.getSnapshot().lastError).toContain("boom")
   })
 })

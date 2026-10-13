@@ -98,7 +98,7 @@ function present(state: SessionState, ctx: ReduceContext, effects: SessionEffect
     }
     return {
       state: { ...s, reliefTriggered, phase: 'presenting', current, lastGrade: null },
-      effects: [...effects, { type: 'play', plan: current.exercise.plan }],
+      effects: [...effects, { type: 'play', plan: current.exercise.plan, contentStartSec: current.exercise.contentStartSec }],
     }
   }
   return finish(s, ctx, effects, true)
