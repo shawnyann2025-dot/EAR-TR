@@ -518,14 +518,15 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 ### 10.1 实体
 
 ```ts
-Profile       { id, displayScheme, vocalRange, settings, createdAt }
-MasteryRecord { kpId, modality, stability, difficulty,
-                variationLevel, contextLevel, updatedAt }
-Attempt       { at, kpId, modality, seed, params,
-                correct, latencyMs, detail }
-SessionRecord { date, plan, progressIndex, completedAt }
-GateRecord    { phaseId, attempts, passedAt }
+Profile       { id, createdAtLocalDate, phaseId, displayScheme, placement, schemaVersion }
+MasteryState  （按 MasteryKey 存，结构见 §7.1）
+Attempt       { at, day, sessionNo, kpId, modality, spec, correct, latencyMs, detail }
+SessionRecord { day, sessionNo, phaseId, plan, index, progress, boss, byTrack, reliefTriggered, completed }
+GateRecord    { phaseId, passedOnDay }
+AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚合
 ```
+
+（P-3a 修订：`Attempt` 改存实时规格 `spec`——含档位与 seed，可复现该题；阶梯状态不落盘，由掌握度窗口推导。详见 P-3 spec §4.1。）
 
 ### 10.2 Attempt 全量留存
 
@@ -658,6 +659,7 @@ P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。�
 **FWD-1 · `AudioEngine.active` 无界增长（影响 P-3）**
 `play()` 只往 `active` 数组 push，从不修剪；`onended` 断开了节点却不移除引用；只有 `stopAll()` 清空。P-1 内被验证页每次先调 `stopAll()` 所掩盖。P-3 会话运行时若连续播放（播题 → 等答 → 播反馈 → 下一题）而不每次 `stopAll()`，节点引用会随会话线性累积——单题约 10–20 事件 × 每事件 4–6 个节点，一次 30 分钟会话可积累上万个已断开但无法回收的 `AudioNode` 引用。
 **修法**：`onended` 里 splice，或 `play()` 开头按 `endSec` 清理过期项。
+**状态（P-3a，已关闭）**：每个音的最后一个分音结束时，释放该音全部节点并移出 `active`；`AudioEngine.activeCount` 供测试断言连续播放不增长。
 
 **FWD-2 · `accent` 与「力度」变异轴争夺同一个 `gain` 字段（影响 P-2）**
 `rhythm.ts` 的 `TimedOnset` 有 `accent: boolean`，而 `playback.ts` 的 `NoteSpec`/`PlaybackEvent` 只有一个 `gain: number`。§6.2 的变异轴 5「力度」也要写 `gain`。且 `TimedOnset → NoteSpec` 的桥接函数目前根本不存在。

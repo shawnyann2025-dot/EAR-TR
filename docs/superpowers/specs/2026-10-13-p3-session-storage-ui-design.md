@@ -105,7 +105,8 @@ type SessionEffect =
   | { type: 'saveAttempt'; attempt: AttemptRecord }
   | { type: 'saveMastery'; key: MasteryKey; state: MasteryState }
   | { type: 'saveSession'; record: SessionRecord }
-  | { type: 'saveProfile'; profile: Profile }
+  | { type: 'advancePhase'; from: PhaseId; to: PhaseId; day: number }
+  | { type: 'itemError'; spec: ExerciseSpec; message: string }
   | { type: 'ended'; summary: SessionSummary }
 
 function reduce(
@@ -114,6 +115,8 @@ function reduce(
   ctx: { curriculum: Curriculum; mastery: MasteryStore },
 ): { state: SessionState; effects: SessionEffect[] }
 ```
+
+状态机不持有 Profile：`advancePhase` 只声明「阶段从 `from` 推进到 `to`」，由壳层更新 `Profile.phaseId` 并写 `GateRecord`。`itemError` 报告某道计划题出题抛错（已被跳过），由壳层记错误日志。
 
 `reduce` 是纯函数；掌握度表以只读形式经 `ctx` 传入，变化通过 `saveMastery` 副作用交给壳层（壳层同时更新自己的内存副本）。
 
@@ -170,15 +173,17 @@ interface AttemptRecord {
 interface SessionRecord {
   day: number
   sessionNo: number
+  phaseId: PhaseId
   plan: SessionPlan
   index: number
   progress: SessionProgress
   boss: { attempted: number; correct: number }
+  byTrack: Record<Track, number>      // 各轨道计分题数
   reliefTriggered: boolean
   completed: boolean
 }
 
-interface GateRecord { phaseId: PhaseId; passedOnDay: number }
+interface GateRecord { phaseId: PhaseId; passedOnDay: number }   // 历史只追加，不覆盖
 interface AttemptAggregate { key: MasteryKey; attempts: number; correct: number }
 ```
 
@@ -198,7 +203,7 @@ interface Repository {
   latestSessionNo(day: number): Promise<number | null>
   putSession(r: SessionRecord): Promise<void>
   putGate(g: GateRecord): Promise<void>
-  exportAll(): Promise<ExportBundle>
+  exportAll(exportedAt: string): Promise<ExportBundle>   // 时间戳由调用方传入，存储层不读时钟
   importAll(bundle: ExportBundle): Promise<void>
 }
 ```
@@ -212,7 +217,8 @@ interface Repository {
 
 ### 4.4 损坏与导出导入
 
-- **损坏**：打开或读取时发现结构不符（缺仓库、字段类型错、版本号高于本程序）→ 抛 `StorageCorruptError`，其中带一份尽力读出的**原始数据导出字符串**。壳层让用户先下载这份损坏副本，确认后才重建。**绝不静默清空**（主 spec §10.3）。
+- **不可用**：IndexedDB 不存在，或打开时失败且不是版本冲突（`VersionError`）→ 抛 `StorageUnavailableError`，壳层降级为内存仓库（主 spec §12）。
+- **损坏**：版本号高于本程序、缺仓库、Profile 结构不对 → 抛 `StorageCorruptError`，其中带一份尽力读出的**原始数据导出字符串**（`rawDump`，按仓库存 `[key, value]` 对）。壳层让用户先下载这份损坏副本，确认后才重建。**绝不静默清空**（主 spec §10.3）。
 - **导出**：`ExportBundle = { schemaVersion, exportedAt, profile, mastery, attempts, attemptAggregates, sessions, gates }`，一个 JSON 文件。
 - **导入**：校验结构 → 迁移到当前版本 → **先自动导出当前数据**（交给壳层提供下载）→ 整体替换。任何一步失败都不改现有数据。
 
@@ -222,7 +228,9 @@ interface Repository {
 
 `createRuntime({ repo, audio, clock, curriculum })` 返回一个可订阅对象：
 
-- 持有 `SessionState` 与掌握度内存副本；`dispatch(event)` 调 `reduce`，按顺序执行副作用（播放、落盘、结束回调），然后通知订阅者。
+- 持有 `SessionState` 与掌握度内存副本；`dispatch(event)` 调 `reduce`，按顺序执行副作用（播放、落盘、结束回调），然后通知订阅者。所有会改状态的操作经同一条队列串行执行。
+- **快照**：`getSnapshot()` 里 `storageError` 是独立字段，专供「只读警告」展示，与 `lastError` 分开。
+- **续起**：中断后界面用 `dispatch({type:'start'})` 恢复，不再调 `startToday`。
 - **播放**：`audio.play(plan)`，在内容播完时派发 `contentPlayed`（按 `plan.totalDurSec` 与 `AudioContext` 时钟计时）。
 - **落盘失败**：重试一次；仍失败则把运行时切到「只读警告」状态，界面提示「进度暂时无法保存，可导出备份」，练习不中断。
 - **出题抛错**：理论上已被集成守卫排除；若发生，跳过该计划题并记一条错误日志，不写作答，不让整场会话崩掉。
@@ -291,13 +299,19 @@ P-3a 用假音频（记录调用、可手动推进时间）与内存存储测试
 
 | 情况 | 处理 |
 |---|---|
-| IndexedDB 不可用 | 自动降级为内存存储，顶部常驻警告 |
+| IndexedDB 不可用（`StorageUnavailableError`） | 自动降级为内存存储，顶部常驻警告 |
 | 数据损坏 | 先让用户下载损坏副本，确认后重建；不静默清空 |
 | 落盘失败 | 重试一次；仍失败进入「只读警告」状态，练习不中断，提示导出 |
 | `AudioContext` 创建失败 | 明确提示浏览器不支持 |
 | 出题抛错 | 跳过该题、记错误日志、不写作答 |
 | 中断 | 当前题作废重出，不计错 |
 | 导入失败 | 不改现有数据，提示原因 |
+
+---
+
+### 已知局限（P-3a）
+
+本地日期在会话进行中跨天时，该会话沿用开场时的 `day`。前一天遗留的未完成会话**永不收尾**：不跑停滞护栏、不评估关卡；新的一天一律开新会话。
 
 ---
 
