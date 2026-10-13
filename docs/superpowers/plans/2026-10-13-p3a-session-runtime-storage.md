@@ -1434,6 +1434,7 @@ git commit -m "feat(session): 重练小会话与加练" -m "Co-Authored-By: Clau
 
 ```ts
 import { describe, expect, it } from 'vitest'
+import { masteryKey } from '../curriculum/knowledgePoints'
 import type { AttemptRecord } from '../session/types'
 import { archiveOverflow } from './archive'
 
@@ -1456,17 +1457,17 @@ describe('archiveOverflow（主 spec §10.2）', () => {
       attempt('degree:major:mi', true, 2),
       attempt('degree:major:do', true, 3),
     ]
-    const r = archiveOverflow(a, [{ key: 'degree:major:do|recognize', attempts: 10, correct: 7 }], 1)
+    const r = archiveOverflow(a, [{ key: masteryKey('degree:major:do', 'recognize'), attempts: 10, correct: 7 }], 1)
     expect(r.attempts).toEqual([a[3]])
     expect(r.aggregates.sort((x, y) => x.key.localeCompare(y.key))).toEqual([
-      { key: 'degree:major:do|recognize', attempts: 12, correct: 8 },
-      { key: 'degree:major:mi|recognize', attempts: 1, correct: 1 },
+      { key: masteryKey('degree:major:do', 'recognize'), attempts: 12, correct: 8 },
+      { key: masteryKey('degree:major:mi', 'recognize'), attempts: 1, correct: 1 },
     ])
   })
 })
 ```
 
-> 注意：`MasteryKey` 的字符串格式以 `masteryKey(kpId, modality)` 为准。实现中一律调用 `masteryKey`，测试里的期望值也改用 `masteryKey('degree:major:do', 'recognize')` 计算（若它的格式不是 `kpId|modality`，按实际格式写）。
+> `MasteryKey` 的格式是 `kpId@modality`；测试与实现一律经 `masteryKey()` 构造，不手写字符串。
 
 `src/storage/bundle.test.ts`：
 
@@ -2400,7 +2401,7 @@ import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { PlaybackPlan } from '../music/playback'
 import type { MasteryState } from '../scheduling/mastery'
 import { buildSessionPlan } from '../scheduling/scheduler'
-import { createDrill, createSession, reduce, resumeSession } from '../session/machine'
+import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
 import { dayIndex, sessionSeed } from '../session/time'
 import { SESSION_MINUTES, type SessionEffect, type SessionEvent, type SessionState } from '../session/types'
 import { SCHEMA_VERSION, type Profile, type Repository } from '../storage/types'
@@ -2561,7 +2562,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       minutes: SESSION_MINUTES,
     })
     const state = createSession({ mode: 'session', day, sessionNo, phaseId: p.phaseId, plan })
-    await write(() => repo.putSession({ ...state, plan, completed: false, index: 0 } as never))
+    await write(() => repo.putSession(toRecord(state)))
     return begin(state)
   }
 
@@ -2600,7 +2601,6 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
 }
 ```
 
-> 注意 `openSession` 里新建会话后写入的记录：应当用 `toRecord(state)`（`session/machine` 已导出）而不是手拼对象——实现时改为 `import { toRecord } from '../session/machine'` 并 `await write(() => repo.putSession(toRecord(state)))`，删掉 `as never` 的写法。这是本计划刻意留给实现者核对的一处：最终代码不得出现 `as never`。
 
 - [ ] **Step 4: 运行测试，确认通过**
 
