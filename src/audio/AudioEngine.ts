@@ -35,6 +35,22 @@ export class AudioEngine {
     return { startSec, endSec: planEndSec(plan, startSec) }
   }
 
+  /** 仍在 active 中的节点数（FWD-1：已结束的节点应已移除） */
+  get activeCount(): number {
+    return this.active.length
+  }
+
+  private release(nodes: { disconnect(): void }[]): void {
+    for (const node of nodes) {
+      try {
+        node.disconnect()
+      } catch {
+        // 已断开，忽略
+      }
+    }
+    this.active = this.active.filter((n) => !nodes.includes(n))
+  }
+
   stopAll(): void {
     for (const node of this.active) {
       try {
@@ -74,6 +90,8 @@ export class AudioEngine {
     amp.gain.setValueAtTime(sustainLevel, releaseStart)
     amp.gain.linearRampToValueAtTime(0, voice.stopSec)
 
+    const voiceNodes: { disconnect(): void }[] = [amp]
+    let remaining = voice.timbre.partials.length
     for (const partial of voice.timbre.partials) {
       const osc = this.ctx.createOscillator()
       osc.type = voice.timbre.oscType
@@ -88,13 +106,11 @@ export class AudioEngine {
       osc.stop(voice.stopSec)
 
       this.active.push(osc, partialGain)
+      voiceNodes.push(osc, partialGain)
       osc.onended = () => {
-        try {
-          osc.disconnect()
-          partialGain.disconnect()
-        } catch {
-          // 已断开，忽略
-        }
+        remaining--
+        // FWD-1：该音的最后一个分音结束时，释放该音全部节点并移出 active
+        if (remaining === 0) this.release(voiceNodes)
       }
     }
   }

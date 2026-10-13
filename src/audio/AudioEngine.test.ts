@@ -163,3 +163,27 @@ describe('AudioEngine', () => {
     }
   })
 })
+
+describe('FWD-1：已结束的节点不再累积', () => {
+  it('每个音的全部振荡器结束后，active 恢复为 0；连续播放不线性增长', () => {
+    const { ctx, created } = makeFakeContext()
+    const engine = new AudioEngine(ctx as unknown as AudioContext)
+    const plan = notesToPlan([{ midi: 60, atSec: 0, durSec: 0.5 }, { midi: 64, atSec: 0.5, durSec: 0.5 }], 'piano')
+
+    for (let round = 0; round < 5; round++) {
+      engine.play(plan)
+      expect(engine.activeCount).toBeGreaterThan(0)
+      // 模拟所有已创建振荡器播完
+      for (const osc of created.oscillators) osc.onended?.()
+      expect(engine.activeCount).toBe(0)
+    }
+  })
+
+  it('stopAll 之后 activeCount 为 0', () => {
+    const { ctx } = makeFakeContext()
+    const engine = new AudioEngine(ctx as unknown as AudioContext)
+    engine.play(notesToPlan([{ midi: 60, atSec: 0, durSec: 1 }], 'strings'))
+    engine.stopAll()
+    expect(engine.activeCount).toBe(0)
+  })
+})
