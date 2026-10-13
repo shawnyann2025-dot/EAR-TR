@@ -45,8 +45,8 @@
 **Interfaces:**
 - Produces（`yin.ts`）：`SAMPLE_RATE`、`FRAME_SIZE`、`HOP_SIZE`、`YIN_THRESHOLD`、`F0_MIN_HZ`、`F0_MAX_HZ`；`export interface PitchFrame { f0Hz: number | null; aperiodicity: number; rms: number }`；`export function yinFrame(samples: Float32Array, sampleRate?: number): PitchFrame`
 - Produces（`synth.ts`）：
-  - `export interface Partial { ratio: number; amp: number }`
-  - `export function tone(freqHz: number, durSec: number, opts?: { sampleRate?: number; partials?: Partial[]; amp?: number; vibratoCents?: number; vibratoHz?: number }): Float32Array`（相位连续；颤音为正弦调频，峰值 `vibratoCents`）
+  - `export interface Harmonic { ratio: number; amp: number }`
+  - `export function tone(freqHz: number, durSec: number, opts?: { sampleRate?: number; partials?: Harmonic[]; amp?: number; vibratoCents?: number; vibratoHz?: number }): Float32Array`（相位连续；颤音为正弦调频，峰值 `vibratoCents`）
   - `export function silence(durSec: number, sampleRate?: number): Float32Array`
   - `export function noise(durSec: number, seed: number, amp?: number, sampleRate?: number): Float32Array`（`makeRng`）
   - `export function concat(...parts: Float32Array[]): Float32Array`
@@ -112,7 +112,7 @@ import { makeRng } from '../music/rng'
 import { FRAME_SIZE, HOP_SIZE, SAMPLE_RATE } from './yin'
 
 /** 合成信号：测试与验收用。纯函数，确定性 */
-export interface Partial {
+export interface Harmonic {
   ratio: number
   amp: number
 }
@@ -120,7 +120,7 @@ export interface Partial {
 export function tone(
   freqHz: number,
   durSec: number,
-  opts: { sampleRate?: number; partials?: Partial[]; amp?: number; vibratoCents?: number; vibratoHz?: number } = {},
+  opts: { sampleRate?: number; partials?: Harmonic[]; amp?: number; vibratoCents?: number; vibratoHz?: number } = {},
 ): Float32Array {
   const sr = opts.sampleRate ?? SAMPLE_RATE
   const partials = opts.partials ?? [{ ratio: 1, amp: 1 }]
@@ -208,8 +208,8 @@ export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE
   const w = n - tauMax
 
   // 1. 差分函数
-  const d = new Float64Array(tauMax + 2)
-  for (let tau = 1; tau <= tauMax + 1 && tau < n - w + 1; tau++) {
+  const d = new Float64Array(tauMax + 1)
+  for (let tau = 1; tau <= tauMax; tau++) {
     let s = 0
     for (let j = 0; j < w; j++) {
       const diff = samples[j] - samples[j + tau]
@@ -219,10 +219,10 @@ export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE
   }
 
   // 2. 累积均值归一化
-  const cmnd = new Float64Array(tauMax + 2)
+  const cmnd = new Float64Array(tauMax + 1)
   cmnd[0] = 1
   let running = 0
-  for (let tau = 1; tau <= tauMax + 1; tau++) {
+  for (let tau = 1; tau <= tauMax; tau++) {
     running += d[tau]
     cmnd[tau] = running > 0 ? (d[tau] * tau) / running : 1
   }
@@ -244,7 +244,7 @@ export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE
 
   // 4. 抛物线插值（在原始差分函数上，精度更好）
   let refined = tauEst
-  if (tauEst > 1 && tauEst < tauMax + 1) {
+  if (tauEst > 1 && tauEst < tauMax) {
     const s0 = d[tauEst - 1]
     const s1 = d[tauEst]
     const s2 = d[tauEst + 1]
