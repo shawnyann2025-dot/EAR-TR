@@ -66,7 +66,7 @@ src/exercises/
 落在 `music/` 的新增：
 - `rhythm.ts`：`onsetsToNotes(onsets, midi, velocity)`（FWD-2 桥接）
 - `register.ts`：`foldPlanToRange(plan, lo, hi)`（FWD-4 八度折叠）
-- `chord.ts`：`voiceChord(chord, doMidi, bassMidi)`（FWD-3，H 轨计划落地；不改 `chordToMidi`）
+- `chord.ts`：`voiceChord(chord, rootMidi) → { bassMidi, upperMidis }`（FWD-3，P-2b-H 已落地；不改 `chordToMidi`）
 
 ---
 
@@ -124,9 +124,9 @@ interface FeedbackPlan {
 type PromptId =
   | 'which-degree' | 'sing-degrees' | 'notate-melody'
   | 'did-it-modulate' | 'sing-new-tonic' | 'new-tonic-degree'
-  | 'which-quality' | 'which-chord' | 'sing-arpeggio' | 'notate-chords'
+  | 'which-quality' | 'which-chord' | 'sing-arpeggio' | 'notate-chords' | 'notate-qualities'
   | 'which-progression' | 'sing-bassline' | 'notate-progression'
-  | 'which-inversion' | 'which-bass-contour' | 'notate-bassline'
+  | 'which-inversion' | 'which-bass-contour' | 'notate-bassline' | 'notate-inversions'
   | 'which-pattern' | 'tap-pattern' | 'notate-patterns'
   | 'which-meter' | 'tap-downbeats' | 'which-onset-is-beat-one'
   | 'which-pickup' | 'which-meter-sequence' | 'notate-meters'
@@ -345,9 +345,9 @@ P-2b-R 合入时写回：§6.1 增补 R 轨语境定义（D7）；§16.2 FWD-6 �
 
 ## 14. P-2b-T 终审带入后续计划的约束
 
-- P-2b-H：`foldPlanToRange` 逐事件折叠会改变和弦转位（低音被抬到上方声部之上）。H 轨必须按整段内容统一移八度，或限制 H 轨 `doMidi` 使低音 ≥ MIDI 36；逐事件折叠只作语境持续低音的兜底。加一条属性测试：折叠不改变题目内容事件。
-- P-2b-H：把 `DifficultyParams` 改为由表推导的映射类型 `{ -readonly [K in keyof typeof DIFFICULTY_TABLE]: number }`，再加新行。
-- P-2b-H：小调和弦与小调音级一样以主音为锚（本次修订 §7.2 已落地的 `doMidiFor` / `degreeToMidiFromTonic`）。
+- P-2b-H：`foldPlanToRange` 逐事件折叠会改变和弦转位（低音被抬到上方声部之上）。H 轨必须按整段内容统一移八度，或限制 H 轨 `doMidi` 使低音 ≥ MIDI 36；逐事件折叠只作语境持续低音的兜底。加一条属性测试：折叠不改变题目内容事件。（P-2b-H 已落实）
+- P-2b-H：把 `DifficultyParams` 改为由表推导的映射类型 `{ -readonly [K in keyof typeof DIFFICULTY_TABLE]: number }`，再加新行。（P-2b-H 已落实）
+- P-2b-H：小调和弦与小调音级一样以主音为锚（本次修订 §7.2 已落地的 `doMidiFor` / `degreeToMidiFromTonic`）。（P-2b-H 已落实）
 - P-2b-R：`GeneratorEntry` 增加语境种类（`'tonal' | 'metronome'`）或语境/锚点函数，`generate` 按它分派；R 轨行的 `mode` 取默认值。
 - P-2b-R：`grade` 先统一校验 `format.kind === answer.kind`；补打拍边界用例（恰在容差上、多点、负偏差）。
 - P-4：唱模态判定按主 spec §9.3 做八度折叠（音分差对 1200 取模），`PitchTarget.midi` 只是参考八度。
