@@ -1,3 +1,5 @@
+import type { NoteSpec } from './playback'
+
 export interface Meter {
   beatsPerBar: number
   /** 以几分音符为一拍。4 = 四分音符，8 = 八分音符（复合拍） */
@@ -47,4 +49,26 @@ export function expandRhythm(
  */
 export function rhythmDurationSec(pattern: RhythmPattern, bpm: number): number {
   return beatsToSeconds(pattern.bars * pattern.meter.beatsPerBar, bpm)
+}
+
+/** 非重音相对重音的力度系数（P-2b spec D9） */
+export const ACCENT_OFF_FACTOR = 0.75
+
+/**
+ * TimedOnset → NoteSpec 的桥接（FWD-2）。
+ *
+ * 合成规则：gain = velocity × (accent ? 1 : ACCENT_OFF_FACTOR)。
+ * 力度变异轴只决定 velocity，accent 只决定相对系数——两者不再争同一个字段。
+ */
+export function onsetsToNotes(
+  onsets: readonly TimedOnset[],
+  midi: number,
+  velocity: number,
+): NoteSpec[] {
+  return onsets.map((o) => ({
+    midi,
+    atSec: o.atSec,
+    durSec: o.durSec,
+    gain: velocity * (o.accent ? 1 : ACCENT_OFF_FACTOR),
+  }))
 }
