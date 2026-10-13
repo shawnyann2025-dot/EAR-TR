@@ -65,3 +65,29 @@ export function chordToMidi(chord: Chord, doMidi: number): number[] {
   }
   return notes
 }
+
+export interface Voicing {
+  /** 低音声部（单音） */
+  bassMidi: number
+  /** 上方声部：从根音起的原位密集排列 */
+  upperMidis: number[]
+}
+
+/**
+ * 带独立低音声部的排列（FWD-3）。
+ *
+ * chordToMidi 把转位做成「向上旋转」，低音会被推高（二转 C 的低音是 G4）——
+ * 对 H6 的转位与低音线听辨不够用。这里让低音待在低音区：低音取转位指定的
+ * 和弦音、放在根音下方一个八度的区域；上方声部保持原位密集。
+ * 低音最高为 rootMidi + 11 - 12 = rootMidi - 1，故严格低于全部上方声部。
+ * 不改 chordToMidi——它对 H1–H5 的行为是正确的。
+ */
+export function voiceChord(chord: Chord, rootMidi: number): Voicing {
+  const intervals = QUALITY_INTERVALS[chord.quality]
+  const n = intervals.length
+  const inv = ((chord.inversion % n) + n) % n
+  return {
+    bassMidi: rootMidi + intervals[inv] - 12,
+    upperMidis: intervals.map((i) => rootMidi + i),
+  }
+}
