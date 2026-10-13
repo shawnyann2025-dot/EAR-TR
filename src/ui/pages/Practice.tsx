@@ -12,6 +12,32 @@ const schedule = (seconds: number, fn: () => void) => {
   return () => clearTimeout(id)
 }
 
+/** 两步确认：首次点击变为「确定结束本场？」，4 秒内再点才结束 */
+const END_CONFIRM_MS = 4000
+function EndSessionButton(props: { onEnd: () => void }) {
+  const [armed, setArmed] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  return (
+    <button
+      type="button"
+      className={armed ? 'danger' : undefined}
+      onClick={() => {
+        if (!armed) {
+          setArmed(true)
+          timer.current = setTimeout(() => setArmed(false), END_CONFIRM_MS)
+          return
+        }
+        if (timer.current) clearTimeout(timer.current)
+        setArmed(false)
+        props.onEnd()
+      }}
+    >
+      {armed ? '确定结束本场？' : '结束本场'}
+    </button>
+  )
+}
+
 export function Practice() {
   const { runtime, audio } = useRuntime()
   const snap = useSnapshot()
@@ -21,6 +47,9 @@ export function Practice() {
   const [lastResponse, setLastResponse] = useState<Response | null>(null)
   const [error, setError] = useState<string | null>(null)
   const answeringSince = useRef(0)
+  const phaseRef = useRef(session.phase)
+  phaseRef.current = session.phase
+  const endEarly = () => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
 
   const live = session.phase === 'presenting' || session.phase === 'answering'
@@ -36,7 +65,14 @@ export function Practice() {
   useEffect(() => {
     if (session.phase !== 'feedback' || !grade || !cur) return
     if (grade.correct) {
-      const id = setTimeout(() => void runtime.dispatch({ type: 'next' }), CORRECT_ADVANCE_MS)
+      const id = setTimeout(() => {
+        // 页面已隐藏：不自动进入下一题，回来后由用户点「下一题」
+        if (document.visibilityState === 'hidden') return
+        void (async () => {
+          try { await audio.unlock() } catch { /* 自动前进时忽略 */ }
+          await runtime.dispatch({ type: 'next' })
+        })()
+      }, CORRECT_ADVANCE_MS)
       return () => clearTimeout(id)
     }
     try {
@@ -49,6 +85,8 @@ export function Practice() {
 
   const respond = useCallback(
     (r: Response) => {
+      if (phaseRef.current !== 'answering') return
+      phaseRef.current = 'feedback'
       setLastResponse(r)
       const latencyMs = Math.max(0, (audio.currentTime - answeringSince.current) * 1000)
       void runtime.dispatch({ type: 'answer', response: r, latencyMs })
@@ -67,7 +105,6 @@ export function Practice() {
       <main className="page practice">
         <div className="overlay">
           <p>练习暂停了。</p>
-          <button type="button" onClick={() => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }}>结束本场</button>
           {error && <p className="error">{error}</p>}
           <button
             type="button"
@@ -83,6 +120,7 @@ export function Practice() {
           >
             继续
           </button>
+          <div className="overlay-end"><EndSessionButton onEnd={endEarly} /></div>
         </div>
       </main>
     )
@@ -97,8 +135,9 @@ export function Practice() {
     <main className="page practice">
       <header className="topbar">
         <span>第 {cur.planIndex + 1} / {total} 题</span>
-        <button type="button" onClick={() => { audio.stopAll(); void runtime.dispatch({ type: 'endEarly' }) }}>结束本场</button>
+        <EndSessionButton onEnd={endEarly} />
       </header>
+      {(snap.lastError || error) && <p className="error small">{error ?? snap.lastError}</p>}
       <section className="prompt">
         <p className="prompt-text">{PROMPT_TEXT[ex.prompt]}</p>
         {ex.format.kind !== 'tap' && (
@@ -123,7 +162,16 @@ export function Practice() {
             scheme={scheme}
             onReplay={() => { audio.stopAll(); audio.play(ex.feedback.replay) }}
             onSlow={() => { audio.stopAll(); audio.play(ex.feedback.slow) }}
-            onNext={() => void runtime.dispatch({ type: 'next' })}
+            onNext={async () => {
+              try {
+                await audio.unlock()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e))
+                return
+              }
+              setError(null)
+              await runtime.dispatch({ type: 'next' })
+            }}
           />
         ) : (
           <AnswerArea

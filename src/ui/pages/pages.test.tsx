@@ -19,6 +19,7 @@ function fakeAudio(): LazyAudio {
   return {
     ready: true,
     latencySec: 0,
+    state: 'running',
     currentTime: 0,
     async unlock() {},
     play: (plan: PlaybackPlan) => ({ startSec: 0, endSec: plan.totalDurSec }),
@@ -115,10 +116,46 @@ describe('首页 → 练习页', () => {
     const { runtime } = await setup()
     await clickStart()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '结束本场' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '确定结束本场？' })) })
     expect(runtime.getSnapshot().session!.phase).toBe('done')
     expect(await screen.findByText(/今日总结/)).toBeTruthy()
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '回到首页' })) })
     expect(await screen.findByRole('button', { name: '再练一场' })).toBeTruthy()
+  })
+
+  it('结束本场：单击只进入确认，不结束；超时后恢复', async () => {
+    const { runtime } = await setup()
+    await clickStart()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '结束本场' })) })
+    expect(screen.getByRole('button', { name: '确定结束本场？' }).className).toContain('danger')
+    expect(runtime.getSnapshot().session!.phase).not.toBe('done')
+    await act(async () => { vi.advanceTimersByTime(4100) })
+    expect(screen.getByRole('button', { name: '结束本场' })).toBeTruthy()
+    expect(runtime.getSnapshot().session!.phase).not.toBe('done')
+  })
+
+  it('页面隐藏时，答对后不自动进入下一题', async () => {
+    const { runtime, flush } = await setup()
+    await clickStart()
+    await advanceToChoice(runtime, flush)
+    await flush()
+    const idx = runtime.getSnapshot().session!.current!.planIndex
+    const ex = runtime.getSnapshot().session!.current!.exercise
+    if (ex.format.kind !== 'choice' || ex.answer.kind !== 'choice') throw new Error('首题应为选择题')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const ctx = { scheme: 'solfege' as const, mode: ex.resolved.key.mode, prompt: ex.prompt }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: labelFor((ex.answer as { id: string }).id, ctx) })) })
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    try {
+      await act(async () => { vi.advanceTimersByTime(800) })
+      vi.useRealTimers()
+      await flush()
+      expect(runtime.getSnapshot().session!.phase).toBe('feedback')
+      expect(runtime.getSnapshot().session!.current!.planIndex).toBe(idx)
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    }
   })
 
   it('中断后显示「继续」，点击后重出同一道题', async () => {

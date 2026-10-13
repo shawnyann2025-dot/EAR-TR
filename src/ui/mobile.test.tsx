@@ -37,6 +37,7 @@ describe('useInterruptions', () => {
   it('页面隐藏或音频被挂起时触发；不 active 时不触发', () => {
     const handlers: ((s: AudioContextState) => void)[] = []
     const audio = {
+      state: 'running' as AudioContextState | 'none',
       onStateChange: (fn: (s: AudioContextState) => void) => {
         handlers.push(fn)
         return () => { handlers.splice(handlers.indexOf(fn), 1) }
@@ -55,5 +56,28 @@ describe('useInterruptions', () => {
     act(() => setVisibility('hidden'))
     expect(onInterrupt).toHaveBeenCalledTimes(2)
     setVisibility('visible')
+  })
+
+  const mk = (state: AudioContextState | 'none') => ({ state, onStateChange: () => () => {} })
+
+  it('激活时页面已隐藏：立即触发', () => {
+    const onInterrupt = vi.fn()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    function I() { useInterruptions({ active: true, audio: mk('running'), onInterrupt }); return null }
+    render(<I />)
+    expect(onInterrupt).toHaveBeenCalledTimes(1)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+  })
+
+  it('激活时音频为 suspended：立即触发；none 或 running 不触发', () => {
+    const onInterrupt = vi.fn()
+    function I(p: { s: AudioContextState | 'none' }) { useInterruptions({ active: true, audio: mk(p.s), onInterrupt }); return null }
+    render(<I s="none" />)
+    cleanup()
+    render(<I s="running" />)
+    expect(onInterrupt).not.toHaveBeenCalled()
+    cleanup()
+    render(<I s="suspended" />)
+    expect(onInterrupt).toHaveBeenCalledTimes(1)
   })
 })

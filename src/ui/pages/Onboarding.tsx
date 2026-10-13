@@ -3,6 +3,7 @@ import { buildCurriculum } from '../../curriculum/curriculum'
 import type { PhaseId } from '../../curriculum/stages'
 import { generate, grade, type Exercise, type Response } from '../../exercises/generate'
 import { initialPlacement, nextProbe, placementResult, recordProbe, type PlacementState } from '../../scheduling/placement'
+import { useWakeLock } from '../mobile'
 import { AnswerArea, type AnswerClock } from '../controls/AnswerArea'
 import { PROMPT_TEXT } from '../labels'
 import { probeSeed, probeSpec } from '../placementProbe'
@@ -29,6 +30,7 @@ export function Onboarding() {
   const [error, setError] = useState<string | null>(null)
   const [retryState, setRetryState] = useState<PlacementState | null>(null)
   const busy = useRef(false)
+  useWakeLock(step.kind === 'probe')
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
 
   const present = useCallback(

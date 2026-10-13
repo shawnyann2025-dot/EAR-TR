@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 17px/1.5 system-ui, -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; -webkit-tap-highlight-color: transparent; }
-button { font: inherit; min-height: 44px; padding: 8px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); background: var(--card); color: var(--fg); }
+button { font: inherit; min-height: 44px; padding: 8px 14px; touch-action: manipulation; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); background: var(--card); color: var(--fg); }
 button:disabled { opacity: 0.4; }
 button.primary { background: var(--accent); color: #fff; border-color: transparent; }
 button.danger { background: var(--bad); color: #fff; border-color: transparent; }
@@ -44,6 +44,8 @@ button.big { width: 100%; min-height: 56px; font-size: 1.1rem; }
 .scale-cell[data-mark='correct'] { background: var(--ok); color: #fff; }
 .scale-cell[data-mark='both'] { background: var(--ok); color: #fff; outline: 2px solid var(--bad); }
 .overlay { display: grid; gap: 12px; place-items: center; padding-top: 30vh; }
+.overlay-end { margin-top: 32px; }
+.error.small { font-size: 0.85rem; margin: 4px 16px; }
 .home-actions { display: grid; gap: 12px; margin-top: 30vh; }
 fieldset { border: none; padding: 0; margin: 0 0 16px; display: flex; gap: 12px; }
 .file-btn { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 10px; border: 1px dashed var(--muted); margin-left: 8px; }

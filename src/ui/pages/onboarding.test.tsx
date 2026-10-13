@@ -19,6 +19,7 @@ function fakeAudio(): LazyAudio {
   return {
     ready: true,
     latencySec: 0,
+    state: 'running',
     currentTime: 0,
     async unlock() {},
     play: (plan: PlaybackPlan) => ({ startSec: 0, endSec: plan.totalDurSec }),

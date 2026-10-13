@@ -17,6 +17,8 @@ export interface LazyAudio extends AudioPort {
   unlock(): Promise<void>
   readonly ready: boolean
   readonly latencySec: number
+  /** 未解锁时为 'none'（视为未中断） */
+  readonly state: AudioContextState | 'none'
   onStateChange(fn: (state: AudioContextState) => void): () => void
 }
 
@@ -38,6 +40,9 @@ export function createLazyAudio(factory: () => AudioEngine = createAudioEngine):
     },
     get ready() {
       return engine !== null
+    },
+    get state() {
+      return engine ? engine.state : 'none'
     },
     get latencySec() {
       return engine ? engine.outputLatencySec : 0
@@ -61,6 +66,20 @@ export function createLazyAudio(factory: () => AudioEngine = createAudioEngine):
       }
     },
   }
+}
+
+/** 生成 id。crypto.randomUUID 仅在安全上下文（https/localhost）可用，局域网 http 下需降级 */
+export function newId(): string {
+  const c = (globalThis as { crypto?: Partial<Crypto> }).crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  if (c && typeof c.getRandomValues === 'function') {
+    const b = c.getRandomValues(new Uint8Array(16))
+    b[6] = (b[6] & 0x0f) | 0x40
+    b[8] = (b[8] & 0x3f) | 0x80
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+  }
+  return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
 export const browserTimer: TimerPort = {
@@ -87,7 +106,7 @@ export async function boot(deps: BootDeps = {}): Promise<BootResult> {
   const openRepo = deps.openRepo ?? (() => openIndexedDbRepository())
   const deleteDb = deps.deleteDb ?? (() => deleteIndexedDb())
   const now = deps.now ?? (() => new Date())
-  const randomId = deps.randomId ?? (() => crypto.randomUUID())
+  const randomId = deps.randomId ?? newId
 
   let repo: Repository
   let storageWarning: string | null = null

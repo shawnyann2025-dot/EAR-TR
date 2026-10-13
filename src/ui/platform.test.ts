@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AudioEngine } from '../audio/AudioEngine'
 import { MemoryRepository } from '../storage/memory'
 import { StorageCorruptError, StorageUnavailableError } from '../storage/types'
-import { boot, createLazyAudio } from './platform'
+import { boot, createLazyAudio, newId } from './platform'
 
 const fixedNow = () => new Date(2026, 9, 13, 9, 0)
 
@@ -80,5 +80,26 @@ describe('createLazyAudio', () => {
     await a.unlock()
     handlers.forEach((h) => h('suspended'))
     expect(seen).toEqual(['suspended'])
+  })
+})
+
+describe('newId', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('randomUUID 可用时直接使用', () => {
+    vi.stubGlobal('crypto', { randomUUID: () => 'uuid-1' })
+    expect(newId()).toBe('uuid-1')
+  })
+
+  it('非安全上下文（无 randomUUID）：用 getRandomValues 生成 v4 格式 id', () => {
+    vi.stubGlobal('crypto', { getRandomValues: (a: Uint8Array) => { a.fill(0xff); return a } })
+    expect(newId()).toBe('ffffffff-ffff-4fff-bfff-ffffffffffff')
+  })
+
+  it('连 getRandomValues 都没有：退回时间戳加随机数', () => {
+    vi.stubGlobal('crypto', {})
+    const id = newId()
+    expect(id.length).toBeGreaterThan(6)
+    expect(newId()).not.toBe(id)
   })
 })

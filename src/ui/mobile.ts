@@ -40,12 +40,14 @@ export function useWakeLock(active: boolean): void {
 }
 
 /** 页面隐藏或音频被系统挂起 → 中断（主 spec §11、P-3 spec §6.6） */
-export function useInterruptions(opts: { active: boolean; audio: Pick<LazyAudio, 'onStateChange'>; onInterrupt: () => void }): void {
+export function useInterruptions(opts: { active: boolean; audio: Pick<LazyAudio, 'onStateChange' | 'state'>; onInterrupt: () => void }): void {
   const cb = useRef(opts.onInterrupt)
   cb.current = opts.onInterrupt
   const { active, audio } = opts
   useEffect(() => {
     if (!active) return
+    // 激活时立即检查：反馈期间可能已经切走或被系统挂起
+    if (document.visibilityState === 'hidden' || (audio.state !== 'none' && audio.state !== 'running')) cb.current()
     const onVis = () => {
       if (document.visibilityState === 'hidden') cb.current()
     }
