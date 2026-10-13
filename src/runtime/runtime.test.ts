@@ -452,4 +452,24 @@ describe('播放信息', () => {
     await rt.dispatch({ type: 'interrupted' })
     expect(rt.getSnapshot().playback).toBeNull()
   })
+
+  it("audio.play 抛错时 playback 为 null，不残留上一道题的值，错误进 lastError", async () => {
+    const d = deps(new MemoryRepository())
+    const play = d.audio.play
+    let calls = 0
+    d.audio.play = (plan, opts) => {
+      if (++calls >= 2) throw new Error("boom")
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    expect(rt.getSnapshot().playback).not.toBeNull()
+    await d.flush()
+    const s = rt.getSnapshot().session!
+    await rt.dispatch({ type: "answer", response: answerAsResponse(s.current!.exercise.answer), latencyMs: 500 })
+    await rt.dispatch({ type: "next" })
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(rt.getSnapshot().playback).toBeNull()
+    expect(rt.getSnapshot().lastError).toContain("boom")
+  })
 })

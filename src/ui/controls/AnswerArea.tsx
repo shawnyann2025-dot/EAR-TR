@@ -51,27 +51,31 @@ function TapArea(props: AnswerAreaProps & { windowSec: number; patternText: stri
   const submitted = useRef(false)
   const [count, setCount] = useState(0)
   const [windowOver, setWindowOver] = useState(false)
+  const [done, setDone] = useState(false)
   const { playback, clock, schedule, windowSec, phase, onResponse } = props
   const startSec = playback?.startSec
   const contentStartSec = playback?.contentStartSec
 
-  // 窗口结束定时（P-3 spec §6.5）
+  // 窗口结束定时（P-3 spec §6.5）。播放信息变了就重新计时，不沿用上一份播放算出的“已结束”
   useEffect(() => {
+    setWindowOver(false)
     if (startSec === undefined || contentStartSec === undefined) return
     const end = tapWindowEndCtxSec({ playStartSec: startSec, contentStartSec, latencySec: clock.latencySec }, windowSec)
     return schedule(Math.max(0, end - clock.now()), () => setWindowOver(true))
   }, [startSec, contentStartSec, windowSec, clock, schedule])
 
-  // 窗口已过且进入 answering：提交一次
+  // 窗口已过且进入 answering：提交一次（窗口结束之后的点击不计入）
   useEffect(() => {
     if (!windowOver || phase !== 'answering' || submitted.current) return
     if (startSec === undefined || contentStartSec === undefined) return
     submitted.current = true
+    setDone(true)
     const tc: TapClock = { playStartSec: startSec, contentStartSec, latencySec: clock.latencySec }
-    onResponse({ kind: 'tap', tapsSec: tapsRelativeToContent(taps.current, tc) })
-  }, [windowOver, phase, startSec, contentStartSec, clock, onResponse])
+    const end = tapWindowEndCtxSec(tc, windowSec)
+    onResponse({ kind: 'tap', tapsSec: tapsRelativeToContent(taps.current.filter((t) => t <= end), tc) })
+  }, [windowOver, phase, startSec, contentStartSec, windowSec, clock, onResponse])
 
-  const collecting = (phase === 'presenting' || phase === 'answering') && !submitted.current
+  const collecting = (phase === 'presenting' || phase === 'answering') && !done
   return (
     <TapControl
       patternText={props.patternText}

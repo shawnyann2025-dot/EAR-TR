@@ -121,6 +121,8 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     switch (effect.type) {
       case 'play': {
         cancelTimer?.()
+        // 先清空：play 若抛错，不能残留上一道题的播放信息
+        set({ playback: null })
         const { startSec, endSec } = audio.play(effect.plan, { cutContextAtSec: effect.contentStartSec })
         set({ playback: { startSec, contentStartSec: effect.contentStartSec } })
         cancelTimer = timer.after(Math.max(0, endSec - audio.currentTime), () => {
