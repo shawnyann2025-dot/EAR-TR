@@ -14,6 +14,11 @@ export class AudioEngine {
 
   constructor(private readonly ctx: AudioContext) {}
 
+  /** 收音（P-4b）要在同一个 AudioContext 上建 MediaStreamSource */
+  get context(): AudioContext {
+    return this.ctx
+  }
+
   get currentTime(): number {
     return this.ctx.currentTime
   }
@@ -149,5 +154,12 @@ export function createAudioEngine(): AudioEngine {
   if (!Ctor) {
     throw new Error('此浏览器不支持 Web Audio，无法播放。')
   }
-  return new AudioEngine(new Ctor())
+  // P-4 spec §4.1：固定 48 kHz（96 kHz 设备上 YIN 的最低可测音会升高）；不支持该选项的浏览器退回默认
+  let ctx: AudioContext
+  try {
+    ctx = new Ctor({ sampleRate: 48000 })
+  } catch {
+    ctx = new Ctor()
+  }
+  return new AudioEngine(ctx)
 }
