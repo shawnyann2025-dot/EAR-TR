@@ -18,6 +18,10 @@ export interface PitchFrame {
   rms: number
 }
 
+// 复用的工作缓冲区（仅在所需长度增长时重新分配）；yinFrame 同步执行，无重入
+let dBuf = new Float64Array(0)
+let cmndBuf = new Float64Array(0)
+
 export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE): PitchFrame {
   const n = samples.length
   let sumSq = 0
@@ -30,7 +34,11 @@ export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE
   const w = n - tauMax
 
   // 1. 差分函数
-  const d = new Float64Array(tauMax + 1)
+  if (dBuf.length < tauMax + 1) {
+    dBuf = new Float64Array(tauMax + 1)
+    cmndBuf = new Float64Array(tauMax + 1)
+  }
+  const d = dBuf
   for (let tau = 1; tau <= tauMax; tau++) {
     let s = 0
     for (let j = 0; j < w; j++) {
@@ -41,7 +49,7 @@ export function yinFrame(samples: Float32Array, sampleRate: number = SAMPLE_RATE
   }
 
   // 2. 累积均值归一化
-  const cmnd = new Float64Array(tauMax + 1)
+  const cmnd = cmndBuf
   cmnd[0] = 1
   let running = 0
   for (let tau = 1; tau <= tauMax; tau++) {
