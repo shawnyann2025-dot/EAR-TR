@@ -174,7 +174,9 @@ const notateFunctional: Generator = (input): ContentResult => {
   const targetPos = entry.answerId === tonicId ? 0 : 1 + rng.int(length - 1)
   const ids: string[] = [tonicId]
   for (let i = 1; i < length; i++) {
-    ids.push(i === targetPos ? entry.answerId : rng.pick(pool.filter((id) => id !== ids[i - 1])))
+    // 目标槽之前的一格不能抽到目标，否则目标会与它相邻重复
+    const avoidTarget = i + 1 === targetPos ? entry.answerId : undefined
+    ids.push(i === targetPos ? entry.answerId : rng.pick(pool.filter((id) => id !== ids[i - 1] && id !== avoidTarget)))
   }
   const raw = chordSequenceNotes(ids.map((id) => functionalChord(entry.mode, id)), input)
   const fit = fitItem({ notes: raw, feedbackNotes: raw, targetMidis: [] })

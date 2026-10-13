@@ -144,7 +144,7 @@ describe('功能和弦·听写', () => {
         expect(ids[0]).toBe('I')
         expect(ids).toContain('vi')
         for (let i = 1; i < ids.length; i++) {
-          if (ids[i] !== 'vi') expect(ids[i]).not.toBe(ids[i - 1])
+          expect(ids[i]).not.toBe(ids[i - 1])
         }
         expect(r.format.alphabet.map((o) => o.id).sort()).toEqual(['I', 'IV', 'V', 'ii', 'vi'].sort())
         const slot = chordSlotSec(inp.resolved.bpm)
