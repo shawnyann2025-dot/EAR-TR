@@ -1,24 +1,36 @@
 import type { Curriculum } from '../curriculum/curriculum'
-import type { KnowledgePointId } from '../curriculum/knowledgePoints'
+import type { KnowledgePointId, Modality } from '../curriculum/knowledgePoints'
 import { notesToPlan } from '../music/playback'
 import { tonicMidi } from '../music/register'
 import { makeRng } from '../music/rng'
 import { describeSpec, type ExerciseSpec } from '../scheduling/exerciseSpec'
 import { wrapWithTonalContext } from './context'
+import { chordEntry, type ChordFamily } from './data/chords'
 import { degreeEntry } from './data/degrees'
 import { FEEDBACK_ANCHOR_SEC, buildFeedback } from './feedback'
+import { FUNCTIONAL_GENERATORS, QUALITY_GENERATORS } from './generators/chord'
 import { DEGREE_GENERATORS } from './generators/degree'
+import { BASSLINE_GENERATORS, INVERSION_GENERATORS } from './generators/inversion'
 import { MODULATION_GENERATORS } from './generators/modulation'
-import type { Exercise, GeneratorEntry } from './types'
+import { PROGRESSION_GENERATORS } from './generators/progression'
+import type { Exercise, Generator, GeneratorEntry } from './types'
 import { doMidiFor, resolveVariation } from './variation'
 
 export { answerAsResponse, grade } from './grade'
 export type * from './types'
 
+const CHORD_GENERATORS: Record<ChordFamily, Record<Modality, Generator>> = {
+  quality: QUALITY_GENERATORS,
+  functional: FUNCTIONAL_GENERATORS,
+  progression: PROGRESSION_GENERATORS,
+  inversion: INVERSION_GENERATORS,
+  bassline: BASSLINE_GENERATORS,
+}
+
 /**
  * 生成器注册表：知识点 → (调式, 三模态生成器)。
  * 由数据表的行决定分支，不由 kind 字段直接决定（P-2b spec §4）。
- * P-2b-H / P-2b-R 在此追加 H/R 轨的查找。
+ * P-2b-R 在此追加 R 轨的查找。
  */
 export function lookupGenerator(kpId: KnowledgePointId): GeneratorEntry | undefined {
   const degree = degreeEntry(kpId)
@@ -27,6 +39,10 @@ export function lookupGenerator(kpId: KnowledgePointId): GeneratorEntry | undefi
       mode: degree.mode,
       byModality: degree.pool === 'modulation' ? MODULATION_GENERATORS : DEGREE_GENERATORS,
     }
+  }
+  const chord = chordEntry(kpId)
+  if (chord) {
+    return { mode: chord.mode, byModality: CHORD_GENERATORS[chord.family] }
   }
   return undefined
 }
