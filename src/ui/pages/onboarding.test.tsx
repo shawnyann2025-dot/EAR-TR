@@ -27,9 +27,9 @@ function fakeAudio(): LazyAudio {
   }
 }
 
-async function setup() {
+async function setup(audioOverride?: LazyAudio) {
   const repo = new MemoryRepository()
-  const audio = fakeAudio()
+  const audio = audioOverride ?? fakeAudio()
   const r = await boot({ openRepo: async () => repo, audio, timer: { after: () => () => {} }, now: () => new Date(2026, 9, 13, 9), randomId: () => 'p-new' })
   if (r.kind !== 'ready') throw new Error('boot 失败')
   render(<RuntimeProvider runtime={r.runtime} audio={audio}><Shell storageWarning={null} /></RuntimeProvider>)

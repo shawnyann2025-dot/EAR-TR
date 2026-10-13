@@ -28,6 +28,14 @@ describe('FeedbackPanel', () => {
     expect(onNext).toHaveBeenCalled()
   })
 
+  it('唱的答错：提示对照自己唱的，不写“正确答案”', () => {
+    const sing = generate({ kpId: 'degree:major:la', modality: 'sing', track: 'T', contextLevel: 2, variationLevel: 3, difficultyStep: 4, seed: 102, segment: 'focus' }, c)
+    expect(sing.answer.kind).toBe('pitch')
+    render(<FeedbackPanel exercise={sing} grade={{ correct: false, detail: { kind: 'pitch' } }} response={{ kind: 'pitch', selfAssessedCorrect: false }} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />)
+    expect(screen.getByText('再听一遍目标音，对照自己唱的')).toBeTruthy()
+    expect(screen.queryByText(/正确答案/)).toBeNull()
+  })
+
   it('答对：只显示确认与下一题', () => {
     render(<FeedbackPanel exercise={degreeEx} grade={{ correct: true, detail: { kind: 'choice' } }} response={null} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />)
     expect(screen.getByText('答对了')).toBeTruthy()

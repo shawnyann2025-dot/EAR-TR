@@ -36,7 +36,7 @@ function answerText(ex: Exercise, scheme: DisplayScheme): string {
     case 'tap':
       return '节奏没对上'
     case 'pitch':
-      return '再听一遍目标'
+      return ''
   }
 }
 
@@ -65,7 +65,7 @@ export function FeedbackPanel(props: {
       : null
   return (
     <div className="feedback wrong">
-      <p>正确答案：{answerText(ex, props.scheme)}</p>
+      <p>{ex.answer.kind === 'pitch' ? '再听一遍目标音，对照自己唱的' : `正确答案：${answerText(ex, props.scheme)}`}</p>
       {bar && <ScaleBar degrees={bar.degrees} chosen={chosen} correct={bar.correct} scheme={props.scheme} mode={ex.resolved.key.mode} />}
       <div className="row">
         <button type="button" onClick={props.onReplay}>再听一遍</button>

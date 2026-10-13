@@ -3,6 +3,7 @@ import type { Response } from '../../exercises/generate'
 import type { AnswerClock } from '../controls/AnswerArea'
 import { AnswerArea } from '../controls/AnswerArea'
 import { CORRECT_ADVANCE_MS, FeedbackPanel } from '../FeedbackPanel'
+import { useInterruptions, useWakeLock } from '../mobile'
 import { PROMPT_TEXT } from '../labels'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
@@ -21,6 +22,10 @@ export function Practice() {
   const [error, setError] = useState<string | null>(null)
   const answeringSince = useRef(0)
   const clock = useMemo<AnswerClock>(() => ({ now: () => audio.currentTime, get latencySec() { return audio.latencySec } }), [audio])
+
+  const live = session.phase === 'presenting' || session.phase === 'answering'
+  useWakeLock(live || session.phase === 'feedback')
+  useInterruptions({ active: live, audio, onInterrupt: () => void runtime.dispatch({ type: 'interrupted' }) })
 
   useEffect(() => {
     if (session.phase === 'answering') answeringSince.current = audio.currentTime
