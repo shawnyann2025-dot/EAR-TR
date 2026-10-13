@@ -67,7 +67,15 @@ export function Practice() {
 
   const live = session.phase === 'presenting' || session.phase === 'answering'
   useWakeLock(live || session.phase === 'feedback')
-  useInterruptions({ active: live, audio, onInterrupt: () => void runtime.dispatch({ type: 'interrupted' }) })
+  useInterruptions({
+    active: live,
+    audio,
+    onInterrupt: () => {
+      // 中断时关麦（录音指示熄灭；回来后下一道唱题懒重开，沿用上次噪声基线）
+      mic.close()
+      void runtime.dispatch({ type: 'interrupted' })
+    },
+  })
 
   useEffect(() => {
     if (session.phase === 'answering') answeringSince.current = audio.currentTime
@@ -153,7 +161,7 @@ export function Practice() {
       {(error || runtimeError) && <p className="error small">{error ?? runtimeError}</p>}
       <section className="prompt">
         <p className="prompt-text">{PROMPT_TEXT[ex.prompt]}</p>
-        {ex.format.kind !== 'tap' && (
+        {ex.format.kind !== 'tap' && !(ex.format.kind === 'pitch' && singMode === 'detect') && (
           <button
             type="button"
             disabled={session.phase !== 'answering'}

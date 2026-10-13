@@ -147,7 +147,9 @@ export function RangeTest(props: { onDone?: () => void }) {
           {errorLine}
           <button type="button" className="primary big" onClick={() => void begin()}>开始测定</button>
           <button type="button" onClick={() => setStep({ kind: 'presets' })}>选声部</button>
-          <button type="button" onClick={() => void save(null)}>跳过，以后再测</button>
+          {props.onDone
+            ? <button type="button" onClick={() => props.onDone?.()}>取消</button>
+            : <button type="button" onClick={() => void save(null)}>跳过，以后再测</button>}
         </main>
       )
     case 'presets':

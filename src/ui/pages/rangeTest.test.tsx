@@ -229,3 +229,29 @@ describe('音域测定（P-4 spec §4.3）', () => {
     expect(events).toContain('close')
   })
 })
+
+describe('从设置重新测定', () => {
+  it('显示「取消」而非「跳过」；取消不改写已存的音域', async () => {
+    const mic = scriptedMic([])
+    const { repo } = await setup(mic)
+    await repo.saveProfile({ ...(await repo.loadProfile())!, vocalRange: { lowMidi: 45, highMidi: 67 }, singMode: 'self' })
+    // 入口在设置页
+    cleanup()
+    const audio = fakeAudio()
+    const r = await boot({ openRepo: async () => repo, audio, mic, timer: { after: () => () => {} }, now: () => new Date(2026, 9, 13, 9), randomId: () => 'p' })
+    if (r.kind !== 'ready') throw new Error()
+    render(<RuntimeProvider runtime={r.runtime} audio={audio} mic={mic}><Shell storageWarning={null} /></RuntimeProvider>)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '设置' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新测定' })) })
+    expect(screen.queryByRole('button', { name: '跳过，以后再测' })).toBeNull()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '取消' })) })
+    expect((await repo.loadProfile())!.vocalRange).toEqual({ lowMidi: 45, highMidi: 67 })
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
+  })
+
+  it('开场引导中仍是「跳过，以后再测」', async () => {
+    await setup(scriptedMic([]))
+    expect(await screen.findByRole('button', { name: '跳过，以后再测' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '取消' })).toBeNull()
+  })
+})
