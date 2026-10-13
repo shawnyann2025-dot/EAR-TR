@@ -1,6 +1,7 @@
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
 import type { DisplayScheme } from '../music/display'
+import type { VocalRange } from '../pitch/range'
 import type { MasteryState } from '../scheduling/mastery'
 import type { AttemptRecord, SessionRecord } from '../session/types'
 
@@ -16,6 +17,12 @@ export interface Profile {
   displayScheme: DisplayScheme
   placement: { done: boolean; startPhase: PhaseId | null }
   schemaVersion: number
+  /** P-4：undefined = 从未问过（首次使用后会进入音域测定）；null = 跳过 */
+  vocalRange?: VocalRange | null
+  /** P-4：唱题判定方式，缺省 'detect' */
+  singMode?: 'detect' | 'self'
+  /** P-4：自动回落自评的原因 */
+  micFallbackReason?: 'denied' | 'unsupported'
 }
 
 export interface GateRecord {

@@ -1,6 +1,7 @@
 import type { Curriculum } from '../curriculum/curriculum'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { PlaybackPlan, PlayOptions } from '../music/playback'
+import { fitToRange } from '../pitch/range'
 import type { MasteryState } from '../scheduling/mastery'
 import { buildSessionPlan } from '../scheduling/scheduler'
 import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
@@ -165,7 +166,12 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   async function dispatchNow(event: SessionEvent): Promise<void> {
     const session = snapshot.session
     if (!session) return
-    const { state, effects } = reduce(session, event, { curriculum, mastery, nowIso: deps.nowIso() })
+    const { state, effects } = reduce(session, event, {
+      curriculum,
+      mastery,
+      nowIso: deps.nowIso(),
+      transformExercise: (ex) => fitToRange(ex, snapshot.profile?.vocalRange ?? null),
+    })
     set({ session: state })
     // 掌握度副本先同步更新，之后任何 await 都不会让后续 reduce 读到旧值
     for (const e of effects) if (e.type === 'saveMastery') mastery = new Map(mastery).set(e.key, e.state)

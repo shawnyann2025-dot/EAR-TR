@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildCurriculum } from '../curriculum/curriculum'
-import { answerAsResponse } from '../exercises/generate'
+import { fitToRange, VOICE_PRESETS } from '../pitch/range'
+import { answerAsResponse, generate as generateEx } from '../exercises/generate'
 import type { Response } from '../exercises/types'
 import type { PlaybackPlan } from '../music/playback'
 import { masteryKey } from '../curriculum/knowledgePoints'
@@ -488,5 +489,20 @@ describe('播放信息', () => {
     expect(calls).toBeGreaterThanOrEqual(2)
     expect(rt.getSnapshot().playback).toBeNull()
     expect(rt.getSnapshot().lastError).toContain("boom")
+  })
+})
+
+describe('出题时搬入音域（P-4 spec §4.2）', () => {
+  it('Profile 有音域时，唱题（热身）按 fitToRange 搬移', async () => {
+    const repo = new MemoryRepository()
+    const d = deps(repo)
+    const rt = createRuntime(d)
+    await rt.ensureProfile()
+    await rt.updateProfile({ vocalRange: { lowMidi: VOICE_PRESETS.bass.lowMidi, highMidi: VOICE_PRESETS.bass.highMidi } })
+    await rt.startToday()
+    const cur = rt.getSnapshot().session!.current!
+    expect(cur.exercise.format.kind).toBe('pitch')
+    const expected = fitToRange(generateEx(cur.spec, c), { lowMidi: 41, highMidi: 62 })
+    expect(cur.exercise).toEqual(expected)
   })
 })

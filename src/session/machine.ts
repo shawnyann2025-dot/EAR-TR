@@ -1,6 +1,6 @@
 import { masteryKey, type MasteryKey, type Track } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
-import { generate, grade } from '../exercises/generate'
+import { generate, grade, type Exercise } from '../exercises/generate'
 import { evaluateGate, nextPhase } from '../scheduling/gate'
 import type { MasteryState } from '../scheduling/mastery'
 import type { SessionPlan } from '../scheduling/scheduler'
@@ -75,6 +75,7 @@ const persists = (state: SessionState) => state.mode === 'session'
 
 /** 出第 index 道计划题；出题抛错则发 itemError 并跳到下一道；计划用完则结束 */
 function present(state: SessionState, ctx: ReduceContext, effects: SessionEffect[]): ReduceResult {
+  const tx = ctx.transformExercise ?? ((e: Exercise) => e)
   let s = state
   while (s.index < s.plan.items.length) {
     const planned = s.plan.items[s.index]
@@ -86,10 +87,10 @@ function present(state: SessionState, ctx: ReduceContext, effects: SessionEffect
         const key = masteryKey(planned.kpId, planned.modality)
         const prepared = prepareItem(planned, s.ladders[key], ctx.mastery, s.progress)
         reliefTriggered = reliefTriggered || prepared.relief
-        current = { planIndex: s.index, spec: prepared.spec, exercise: generate(prepared.spec, ctx.curriculum), scored, ladder: prepared.ladder }
+        current = { planIndex: s.index, spec: prepared.spec, exercise: tx(generate(prepared.spec, ctx.curriculum)), scored, ladder: prepared.ladder }
       } else {
         // 热身题与重练题：规格原样出题，不碰阶梯
-        current = { planIndex: s.index, spec: planned, exercise: generate(planned, ctx.curriculum), scored: false, ladder: null }
+        current = { planIndex: s.index, spec: planned, exercise: tx(generate(planned, ctx.curriculum)), scored: false, ladder: null }
       }
     } catch (e) {
       effects.push({ type: 'itemError', spec: planned, message: (e as Error).message })

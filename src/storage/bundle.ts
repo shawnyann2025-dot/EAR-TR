@@ -11,10 +11,17 @@ const isStr = (x: unknown): x is string => typeof x === 'string'
 function validProfile(p: unknown): boolean {
   if (!isObj(p)) return false
   const pl = p.placement
-  return (
+  const base =
     isStr(p.id) && isStr(p.createdAtLocalDate) && isStr(p.phaseId) && isStr(p.displayScheme) &&
     isNum(p.schemaVersion) && isObj(pl) && typeof pl.done === 'boolean' && (pl.startPhase === null || isStr(pl.startPhase))
-  )
+  if (!base) return false
+  const vr = p.vocalRange
+  if (vr !== undefined && vr !== null && !(isObj(vr) && isNum(vr.lowMidi) && isNum(vr.highMidi))) return false
+  const sm = p.singMode
+  if (sm !== undefined && sm !== 'detect' && sm !== 'self') return false
+  const fr = p.micFallbackReason
+  if (fr !== undefined && fr !== 'denied' && fr !== 'unsupported') return false
+  return true
 }
 function validMasteryPair(pair: unknown): boolean {
   if (!isArray(pair) || pair.length !== 2 || !isStr(pair[0]) || !isObj(pair[1])) return false

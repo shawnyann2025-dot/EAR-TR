@@ -118,6 +118,8 @@ export interface ReduceContext {
   mastery: MasteryStore
   /** 作答记录的时间戳，由壳层传入 */
   nowIso: string
+  /** P-4b：出题后变换题目（壳层用它把唱题搬进学习者音域）。纯函数 */
+  transformExercise?: (ex: Exercise) => Exercise
 }
 
 export interface ReduceResult {
