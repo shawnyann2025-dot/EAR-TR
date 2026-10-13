@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { MIXED_COMBOS, METERS } from '../data/rhythms'
 import { DIFFICULTY_TABLE } from '../difficulty'
-import { METER_GENERATORS, MIXED_METER_GENERATORS, filledPassage } from './meter'
-import { barStartTimes } from './rhythmCommon'
+import { pulsesPerBar } from '../metronome'
+import { METER_GENERATORS, MIXED_METER_GENERATORS, NOTATE_METER_PHRASE_PULSES, filledPassage } from './meter'
+import { RHYTHM_LEGATO, barStartTimes } from './rhythmCommon'
 import { generatorInput } from './testInput'
 
 const SEEDS = Array.from({ length: 30 }, (_, i) => i + 1)
@@ -63,7 +64,7 @@ describe('拍号·打拍', () => {
 })
 
 describe('拍号·听写', () => {
-  it('段数按档位（至少 2），含目标拍号，每段 2 小节、段间空一小节', () => {
+  it('段数按档位（至少 2），含目标拍号；每段固定 6 个感知拍，段间空一小节 4/4', () => {
     for (let step = 0; step <= 5; step++) {
       for (const seed of SEEDS.slice(0, 10)) {
         const r = METER_GENERATORS.notate(generatorInput('rhythm:meter-6-8', 'notate', { step, seed }))
@@ -71,15 +72,58 @@ describe('拍号·听写', () => {
         const phrases = Math.max(2, DIFFICULTY_TABLE.notateRhythmBars[step])
         expect(r.answer.ids).toHaveLength(phrases)
         expect(r.answer.ids).toContain('6/8')
-        expect(r.rhythm?.bars).toHaveLength(phrases * 3 - 1)
-        r.answer.ids.forEach((id, i) => {
-          expect(r.rhythm?.bars[i * 3]).toEqual(METERS[id as keyof typeof METERS])
-          expect(r.rhythm?.bars[i * 3 + 1]).toEqual(METERS[id as keyof typeof METERS])
+        const bars = r.rhythm?.bars ?? []
+        let i = 0
+        r.answer.ids.forEach((id, k) => {
+          const meter = METERS[id as keyof typeof METERS]
+          let pulses = 0
+          while (pulses < NOTATE_METER_PHRASE_PULSES) {
+            expect(bars[i]).toEqual(meter)
+            pulses += pulsesPerBar(bars[i])
+            i++
+          }
+          expect(pulses).toBe(NOTATE_METER_PHRASE_PULSES)
+          if (k < phrases - 1) {
+            expect(bars[i]).toEqual(METERS['4/4'])
+            i++
+          }
         })
-        for (let i = 0; i < phrases - 1; i++) expect(r.rhythm?.bars[i * 3 + 2]).toEqual(METERS['4/4'])
+        expect(i).toBe(bars.length)
         expect(r.format.alphabet.map((o) => o.id).sort()).toEqual(['2/4', '3/4', '6/8'])
         expect(r.prompt).toBe('notate-meters')
       }
+    }
+  })
+
+  it('每段的小节数：2/4 与 6/8 为 3 小节，3/4 为 2 小节', () => {
+    for (const kp of ['rhythm:meter-2-4', 'rhythm:meter-3-4', 'rhythm:meter-6-8']) {
+      const r = METER_GENERATORS.notate(generatorInput(kp, 'notate', { step: 0, seed: 3 }))
+      if (r.answer.kind !== 'sequence') throw new Error('格式错')
+      const first = r.answer.ids[0]
+      const bars = r.rhythm?.bars ?? []
+      const nFirst = bars.findIndex((b) => b.beatsPerBar === 4 && b.beatUnit === 4)
+      expect(nFirst).toBe(first === '3/4' ? 2 : 3)
+    }
+  })
+})
+
+describe('6/8 填充内容', () => {
+  it('每个起音时值为 1 或 3 个八分单位；重音只落在小节第一拍', () => {
+    for (const seed of SEEDS) {
+      const input = generatorInput('rhythm:meter-6-8', 'notate', { seed })
+      const p = filledPassage(['6/8', '6/8', '6/8'], input)
+      const bpm = input.resolved.bpm
+      const eighth = 60 / bpm / 3
+      const starts = barStartTimes(p.bars, bpm)
+      for (const o of p.onsets) {
+        const units = o.durSec / RHYTHM_LEGATO / eighth
+        expect([1, 3].some((u) => Math.abs(units - u) < 1e-6)).toBe(true)
+        if (o.accent) {
+          const local = starts.filter((s) => s <= o.atSec + 1e-9).pop() as number
+          expect(o.atSec - local).toBeCloseTo(0, 9)
+        }
+      }
+      expect(p.onsets.some((o) => o.accent)).toBe(true)
     }
   })
 })

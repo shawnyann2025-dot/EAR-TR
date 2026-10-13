@@ -10,6 +10,10 @@ import { PLAN_MIDI_MAX, PLAN_MIDI_MIN } from './context'
 import { CHORD_ENTRIES } from './data/chords'
 import { DEGREE_ENTRIES } from './data/degrees'
 import { RHYTHM_ENTRIES } from './data/rhythms'
+import { tonicMidi } from '../music/register'
+import { barSec } from './generators/rhythmCommon'
+import { BEAT_ONE_GENERATORS } from './generators/pickup'
+import { generatorInput } from './generators/testInput'
 import { CLICK_OCTAVE, answerAsResponse, generate, generateWith, grade, lookupGenerator } from './generate'
 import { CLICK_GAIN_ACCENT } from './metronome'
 import type { ContentResult, Exercise, GeneratorEntry } from './types'
@@ -283,5 +287,47 @@ describe('generateWith：按语境分派', () => {
     const entry = lookupGenerator(s.kpId)
     if (!entry) throw new Error('缺生成器')
     expect(generateWith(entry, s, c)).toEqual(generate(s, c))
+  })
+})
+
+describe('R 轨管线：final review', () => {
+  const rec = (overrides: Partial<ExerciseSpec>) => spec({ track: 'R', ...overrides })
+
+  it('反馈 replay：内容落在「一小节节拍器 + startPulse 个感知拍」之后，对准脉冲网格', () => {
+    let checked = 0
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = rec({ kpId: 'rhythm:beat-one', modality: 'recognize', contextLevel: 0, seed })
+      const content = BEAT_ONE_GENERATORS.recognize(generatorInput(s.kpId, 'recognize', { seed }))
+      const startPulse = content.rhythm?.startPulse ?? 0
+      if (startPulse === 0) continue
+      checked++
+      const ex = generate(s, c)
+      const bars = content.rhythm?.bars ?? []
+      const bpm = ex.resolved.bpm
+      const tonic = tonicMidi(ex.resolved.key, doMidiFor(ex.resolved))
+      const first = ex.feedback.replay.events.find((e) => Math.round(freqToMidi(e.freqHz)) === tonic)
+      if (!first) throw new Error('replay 里没有内容')
+      expect(first.atSec).toBeCloseTo(barSec(bars[0], bpm) + (startPulse * 60) / bpm + content.notes[0].atSec, 9)
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+
+  it('点击固定用钢琴音色（反馈锚点也是），内容保持变异音色', () => {
+    let checked = 0
+    for (let seed = 1; seed <= 40; seed++) {
+      const ex = generate(rec({ kpId: 'rhythm:quarter', modality: 'recognize', variationLevel: 6, contextLevel: 0, seed }), c)
+      if (ex.resolved.timbreId === 'piano') continue
+      checked++
+      const tonic = tonicMidi(ex.resolved.key, doMidiFor(ex.resolved))
+      for (const p of [ex.plan, ex.feedback.replay]) {
+        const clicks = p.events.filter((e) => Math.round(freqToMidi(e.freqHz)) === tonic + CLICK_OCTAVE)
+        const contents = p.events.filter((e) => Math.round(freqToMidi(e.freqHz)) === tonic)
+        expect(clicks.length).toBeGreaterThan(0)
+        expect(contents.length).toBeGreaterThan(0)
+        expect(clicks.every((e) => e.timbreId === 'piano')).toBe(true)
+        expect(contents.every((e) => e.timbreId === ex.resolved.timbreId)).toBe(true)
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
   })
 })

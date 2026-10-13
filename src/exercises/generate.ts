@@ -16,8 +16,9 @@ import { MODULATION_GENERATORS } from './generators/modulation'
 import { ANACRUSIS_GENERATORS, BEAT_ONE_GENERATORS } from './generators/pickup'
 import { METER_GENERATORS, MIXED_METER_GENERATORS } from './generators/meter'
 import { PATTERN_GENERATORS } from './generators/pattern'
+import { barSec } from './generators/rhythmCommon'
 import { PROGRESSION_GENERATORS } from './generators/progression'
-import { metronomeBarNotes, wrapWithMetronome } from './metronome'
+import { CLICK_TIMBRE, metronomeBarNotes, wrapWithMetronome } from './metronome'
 import type { Exercise, Generator, GeneratorEntry } from './types'
 import { doMidiFor, resolveVariation } from './variation'
 
@@ -90,6 +91,8 @@ export function generateWith(
 
   let wrapped: { plan: Exercise['plan']; contentStartSec: number }
   let anchor: NoteSpec[]
+  let anchorTimbre = resolved.timbreId
+  let contentOffsetSec: number | undefined
   if (entry.context === 'tonal') {
     wrapped = wrapWithTonalContext({
       key: resolved.key,
@@ -112,14 +115,18 @@ export function generateWith(
       mode: content.rhythm.metronome,
       clickMidi,
       timbreId: resolved.timbreId,
+      clickTimbreId: CLICK_TIMBRE,
       content: contentPlan,
       contentDurSec: content.durSec,
       startPulse: content.rhythm.startPulse,
     })
     anchor = metronomeBarNotes(content.rhythm.bars[0], resolved.bpm, clickMidi)
+    anchorTimbre = CLICK_TIMBRE
+    // 内容落在「一小节节拍器 + startPulse 个感知拍」之后，对准脉冲网格
+    contentOffsetSec = barSec(content.rhythm.bars[0], resolved.bpm) + ((content.rhythm.startPulse ?? 0) * 60) / resolved.bpm
   }
 
-  const feedback = buildFeedback(content.feedbackNotes, anchor, resolved.timbreId)
+  const feedback = buildFeedback(content.feedbackNotes, anchor, resolved.timbreId, contentOffsetSec, anchorTimbre)
   return {
     spec,
     resolved,

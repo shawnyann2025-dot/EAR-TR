@@ -5,6 +5,8 @@ import { foldToPlanRange, shiftPlan } from './context'
 import type { MetronomeMode } from './types'
 
 export const CLICK_SEC = 0.06
+/** 点击固定用钢琴音色：弦乐、人声等慢起音音色下 60 ms 的点击不成其为点击；内容仍用变异音色 */
+export const CLICK_TIMBRE: TimbreId = 'piano'
 export const CLICK_GAIN_ACCENT = 0.6
 export const CLICK_GAIN = 0.4
 /** 中性节拍器的预备拍个数（L0 加倍）——固定值，不按拍号分组，免得泄露拍号 */
@@ -57,6 +59,8 @@ export interface MetronomeWrapInput {
   mode: MetronomeMode
   clickMidi: number
   timbreId: TimbreId
+  /** 点击的音色；默认同 timbreId */
+  clickTimbreId?: TimbreId
   /** 题目内容，时刻相对 0 */
   content: PlaybackPlan
   contentDurSec: number
@@ -113,7 +117,7 @@ export function wrapWithMetronome(input: MetronomeWrapInput): {
   const during = kept.map((p) => click(leadInSec + p.atSec, metered && p.downbeat, clickMidi))
 
   const merged = mergePlans(
-    notesToPlan([...countIn, ...during], input.timbreId),
+    notesToPlan([...countIn, ...during], input.clickTimbreId ?? input.timbreId),
     shiftPlan(input.content, leadInSec),
   )
   return { plan: foldToPlanRange(merged), contentStartSec: leadInSec }

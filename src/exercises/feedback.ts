@@ -1,4 +1,4 @@
-import { notesToPlan, type NoteSpec, type TimbreId } from '../music/playback'
+import { mergePlans, notesToPlan, type NoteSpec, type TimbreId } from '../music/playback'
 import { foldToPlanRange } from './context'
 import { SLOW_FACTOR } from './difficulty'
 import type { FeedbackPlan } from './types'
@@ -23,11 +23,16 @@ export function buildFeedback(
   contentNotes: readonly NoteSpec[],
   anchorNotes: readonly NoteSpec[],
   timbreId: TimbreId,
+  /** 内容相对锚点起点的位移；给定时取代「锚点结束 + 间隔」（R 轨要对准脉冲网格） */
+  contentOffsetSec?: number,
+  /** 锚点音色；默认同内容（R 轨点击用固定音色） */
+  anchorTimbreId: TimbreId = timbreId,
 ): FeedbackPlan {
-  const offset = anchorNotes.length > 0 ? endOf(anchorNotes) + FEEDBACK_GAP_SEC : 0
-  const replay = notesToPlan(
-    [...anchorNotes, ...contentNotes.map((n) => ({ ...n, atSec: n.atSec + offset }))],
-    timbreId,
+  const offset =
+    contentOffsetSec ?? (anchorNotes.length > 0 ? endOf(anchorNotes) + FEEDBACK_GAP_SEC : 0)
+  const replay = mergePlans(
+    notesToPlan([...anchorNotes], anchorTimbreId),
+    notesToPlan(contentNotes.map((n) => ({ ...n, atSec: n.atSec + offset })), timbreId),
   )
   const slow = notesToPlan(
     contentNotes.map((n) => ({

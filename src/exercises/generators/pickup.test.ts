@@ -29,7 +29,7 @@ describe('beatOnePassage', () => {
       expect(target.accent).toBe(true)
       expect(p.onsets.slice(0, p.answerIndex - 1).every((o) => !o.accent)).toBe(true)
       expect(p.candidates).toContain(String(p.answerIndex))
-      expect(p.candidates.length).toBeLessThanOrEqual(8)
+      expect(p.candidates.length).toBeLessThanOrEqual(7)
     }
   })
 
@@ -181,6 +181,20 @@ describe('fix round 1', () => {
           ANACRUSIS_GENERATORS[m](generatorInput('rhythm:anacrusis', m, { seed })),
         ]) {
           for (const n of r.notes) expect(n.atSec).toBeGreaterThanOrEqual(0)
+        }
+      }
+    }
+  })
+})
+
+describe('final review：候选上限', () => {
+  it('找 beat 1 的候选最大为 7（不会出现永远不是答案的 8）', () => {
+    for (const kp of ['rhythm:beat-one']) {
+      for (let seed = 1; seed <= 60; seed++) {
+        for (const step of [0, 5]) {
+          const p = beatOnePassage(generatorInput(kp, 'recognize', { seed, step }), 2)
+          expect(Math.max(...p.candidates.map(Number))).toBeLessThanOrEqual(7)
+          expect(p.candidates).not.toContain('8')
         }
       }
     }

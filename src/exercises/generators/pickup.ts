@@ -23,7 +23,7 @@ import {
   type PlacedEvent,
 } from './rhythmCommon'
 
-export const BEAT_ONE_MAX_CANDIDATES = 8
+export const BEAT_ONE_MAX_CANDIDATES = 7
 
 export interface BeatOnePassage {
   bars: Meter[]
@@ -33,7 +33,7 @@ export interface BeatOnePassage {
   startPulse: number
   /** 第 1 小节第一个音的序号（1 起） */
   answerIndex: number
-  /** 候选序号 '2'…（不含 '1'：答案恒 ≥ 2），最多到第 8 个音 */
+  /** 候选序号 '2'…（不含 '1'：答案恒 ≥ 2），最多到第 7 个音 */
   candidates: string[]
 }
 
@@ -101,7 +101,13 @@ const tapBeatOne: Generator = (input): ContentResult => {
     ...listenedNotes(shifted(p.onsets, shift), input),
     durSec: p.durSec - shift,
     prompt: 'tap-downbeats',
-    format: { kind: 'tap', onsetsSec, toleranceSec: params.tapToleranceSec },
+    format: {
+      kind: 'tap',
+      onsetsSec,
+      toleranceSec: params.tapToleranceSec,
+      maxShiftSec: 30 / input.resolved.bpm,
+      windowSec: p.durSec - shift,
+    },
     answer: { kind: 'tap', onsetsSec: [...onsetsSec] },
     rhythm: { bars: p.bars, metronome: 'neutral', startPulse: p.startPulse },
   }
@@ -178,6 +184,8 @@ const tapAnacrusis: Generator = (input): ContentResult => {
       kind: 'tap',
       onsetsSec,
       toleranceSec: difficultyParams(input.spec.difficultyStep).tapToleranceSec,
+      maxShiftSec: 30 / input.resolved.bpm,
+      windowSec: p.durSec,
       patternIds: [p.pickupId, ...p.patterns.map((x) => x.id)],
     },
     answer: { kind: 'tap', onsetsSec: [...onsetsSec] },

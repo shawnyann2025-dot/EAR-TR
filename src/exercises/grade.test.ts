@@ -17,7 +17,7 @@ const pitch: Gradable = {
   answer: { kind: 'pitch', targets: [{ degree: 'do', midi: 60, freqHz: 261.63, centsTolerance: 50 }] },
 }
 const tap: Gradable = {
-  format: { kind: 'tap', onsetsSec: [1, 1.5, 2, 3], toleranceSec: 0.1 },
+  format: { kind: 'tap', onsetsSec: [1, 1.5, 2, 3], toleranceSec: 0.1, maxShiftSec: 10, windowSec: 4 },
   answer: { kind: 'tap', onsetsSec: [1, 1.5, 2, 3] },
 }
 
@@ -121,7 +121,7 @@ describe('grade：先统一校验题目自身的格式（P-2b spec §14）', () 
 describe('grade：打拍边界（P-2b spec §14）', () => {
   // 容差与偏差都取二进制可精确表示的数，避免浮点误差左右边界判定
   const exact: Gradable = {
-    format: { kind: 'tap', onsetsSec: [0, 0.5, 1, 1.5], toleranceSec: 0.125 },
+    format: { kind: 'tap', onsetsSec: [0, 0.5, 1, 1.5], toleranceSec: 0.125, maxShiftSec: 10, windowSec: 2 },
     answer: { kind: 'tap', onsetsSec: [0, 0.5, 1, 1.5] },
   }
 
@@ -159,5 +159,25 @@ describe('grade：听写作答比答案长', () => {
       correct: false,
       detail: { kind: 'sequence', positions: [true, true, true] },
     })
+  })
+})
+
+describe('grade：打拍相位（maxShiftSec）', () => {
+  const phased: Gradable = {
+    format: { kind: 'tap', onsetsSec: [0, 1, 2, 3], toleranceSec: 0.1, maxShiftSec: 0.5, windowSec: 4 },
+    answer: { kind: 'tap', onsetsSec: [0, 1, 2, 3] },
+  }
+  it('整串偏了恰好一拍、间隔完美：错（不能靠平移蒙混）', () => {
+    const r = grade(phased, { kind: 'tap', tapsSec: [1, 2, 3, 4] })
+    expect(r.correct).toBe(false)
+    if (r.detail.kind !== 'tap') throw new Error('detail 类型错')
+    expect(r.detail.offsetsSec).toHaveLength(4)
+  })
+  it('首击偏 0.4 秒（在 maxShiftSec 内）、间隔完美：对', () => {
+    expect(grade(phased, { kind: 'tap', tapsSec: [0.4, 1.4, 2.4, 3.4] }).correct).toBe(true)
+  })
+  it('首击偏差恰为 maxShiftSec：对；略超：错', () => {
+    expect(grade(phased, { kind: 'tap', tapsSec: [0.5, 1.5, 2.5, 3.5] }).correct).toBe(true)
+    expect(grade(phased, { kind: 'tap', tapsSec: [-0.51, 0.49, 1.49, 2.49] }).correct).toBe(false)
   })
 })

@@ -20,6 +20,13 @@ describe('buildFeedback（主 spec §6.4）', () => {
     expect(replay.events[2].atSec).toBeCloseTo(offset + 0.5, 12)
   })
 
+  it('contentOffsetSec：内容恰好移动该值，与锚点长度无关', () => {
+    const { replay } = buildFeedback(content, anchor, 'piano', 2)
+    expect(replay.events).toHaveLength(3)
+    expect(replay.events[1].atSec).toBeCloseTo(2, 12)
+    expect(replay.events[2].atSec).toBeCloseTo(2.5, 12)
+  })
+
   it('slow：只含内容，时刻与时值都除以 SLOW_FACTOR', () => {
     const { slow } = buildFeedback(content, anchor, 'piano')
     expect(slow.events).toHaveLength(2)

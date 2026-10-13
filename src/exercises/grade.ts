@@ -46,9 +46,11 @@ export function grade(
       }
       // 整串平移，让首击对齐首个目标起音——消除反应延迟，只比节奏本身
       const shift = target[0] - taps[0]
+      // ……但首击不能偏离首个目标太远：平移只吸收反应延迟，不能把整串挪到别的拍上
       const n = Math.min(taps.length, target.length)
       const offsetsSec = Array.from({ length: n }, (_, i) => taps[i] + shift - target[i])
       const correct =
+        Math.abs(shift) <= format.maxShiftSec + TAP_EPSILON &&
         taps.length === target.length &&
         offsetsSec.every((o) => Math.abs(o) <= format.toleranceSec + TAP_EPSILON)
       return { correct, detail: { kind: 'tap', offsetsSec } }

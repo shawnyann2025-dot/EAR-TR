@@ -24,6 +24,9 @@ import {
 /** 听辨拍号题的感知拍总数（2、3、4 的公倍数）：总长度不随拍号变，不能靠数总拍数判断拍号 */
 export const RECOGNIZE_METER_PULSES = 12
 
+/** 听写拍号题每段固定的感知拍数（2、3 的公倍数）：段长不随拍号变，不能靠段长判断拍号 */
+export const NOTATE_METER_PHRASE_PULSES = 6
+
 /** 每项一小节：给拍号则随机填满；null 是固定 4/4 的空小节（段间间隔） */
 export function filledPassage(
   meterIds: readonly (MeterId | null)[],
@@ -75,7 +78,13 @@ function downbeatTap(
   return {
     ...listened(passage, input),
     prompt: 'tap-downbeats',
-    format: { kind: 'tap', onsetsSec, toleranceSec: difficultyParams(input.spec.difficultyStep).tapToleranceSec },
+    format: {
+      kind: 'tap',
+      onsetsSec,
+      toleranceSec: difficultyParams(input.spec.difficultyStep).tapToleranceSec,
+      maxShiftSec: 30 / input.resolved.bpm,
+      windowSec: passage.durSec,
+    },
     answer: { kind: 'tap', onsetsSec: [...onsetsSec] },
     rhythm: { bars: passage.bars, metronome: 'neutral' },
   }
@@ -109,8 +118,15 @@ const notateMeters: Generator = (input): ContentResult => {
   const phrases = Math.max(2, difficultyParams(input.spec.difficultyStep).notateRhythmBars)
   const targetPos = rng.int(phrases)
   const meters = Array.from({ length: phrases }, (_, i) => (i === targetPos ? id : rng.pick(pool)))
-  // 每段两小节，段间空一小节（P-2b-R 裁定 2）
-  const layout: (MeterId | null)[] = meters.flatMap((m, i) => (i < phrases - 1 ? [m, m, null] : [m, m]))
+  // 每段固定 6 个感知拍（2/4、6/8 为 3 小节，3/4 为 2 小节），段间空一小节 4/4（P-2b-R 裁定 2）
+  const layout: (MeterId | null)[] = meters.flatMap((m, i) => {
+    const perBar = pulsesPerBar(METERS[m])
+    if (NOTATE_METER_PHRASE_PULSES % perBar !== 0) {
+      throw new Error(`拍号 ${m} 的每小节感知拍数 ${perBar} 不能整除 ${NOTATE_METER_PHRASE_PULSES}`)
+    }
+    const phrase: (MeterId | null)[] = Array.from({ length: NOTATE_METER_PHRASE_PULSES / perBar }, () => m)
+    return i < phrases - 1 ? [...phrase, null] : phrase
+  })
   const passage = filledPassage(layout, input)
   return {
     ...listened(passage, input),

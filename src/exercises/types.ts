@@ -27,6 +27,10 @@ export type AnswerFormat =
       kind: 'tap'
       onsetsSec: number[]
       toleranceSec: number
+      /** 首击允许的最大偏移（秒）——吸收反应延迟，但不能大到整串平移到别的拍上；生成器取半个感知拍 */
+      maxShiftSec: number
+      /** 作答窗口（秒）：内容时长，相对 contentStartSec；内容无声的题 P-3 靠它知道收多久的拍 */
+      windowSec: number
       /** 「打出给定音型」类题：屏幕上要显示的音型 / 弱起 id；边听边打强拍的题不给 */
       patternIds?: string[]
     }

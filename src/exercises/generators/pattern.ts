@@ -78,6 +78,8 @@ const tapPattern: Generator = (input): ContentResult => {
       kind: 'tap',
       onsetsSec,
       toleranceSec: params.tapToleranceSec,
+      maxShiftSec: 30 / input.resolved.bpm,
+      windowSec: passage.durSec,
       patternIds: Array.from({ length: reps }, () => p.id),
     },
     answer: { kind: 'tap', onsetsSec: [...onsetsSec] },
