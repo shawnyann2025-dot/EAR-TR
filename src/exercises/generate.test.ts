@@ -9,8 +9,9 @@ import type { ExerciseSpec } from '../scheduling/exerciseSpec'
 import { PLAN_MIDI_MAX, PLAN_MIDI_MIN } from './context'
 import { CHORD_ENTRIES } from './data/chords'
 import { DEGREE_ENTRIES } from './data/degrees'
-import { answerAsResponse, generate, grade, lookupGenerator } from './generate'
-import type { Exercise } from './types'
+import { CLICK_OCTAVE, answerAsResponse, generate, generateWith, grade, lookupGenerator } from './generate'
+import { CLICK_GAIN_ACCENT } from './metronome'
+import type { ContentResult, Exercise, GeneratorEntry } from './types'
 import { doMidiFor, resolveVariation } from './variation'
 
 const c = buildCurriculum()
@@ -201,5 +202,49 @@ describe('generate：属性（P-2b spec §11 第 3 条）', () => {
 
   it('随机规格里确实有 H 轨', () => {
     expect(specs.filter((x) => x.track === 'H').length).toBeGreaterThan(100)
+  })
+})
+
+describe('generateWith：按语境分派', () => {
+  const fakeContent = (withRhythm: boolean): ContentResult => ({
+    notes: [{ midi: 60, atSec: 0, durSec: 0.2, gain: 0.8 }],
+    feedbackNotes: [{ midi: 60, atSec: 0, durSec: 0.2, gain: 0.8 }],
+    durSec: 4 * (60 / 90),
+    prompt: 'which-pattern',
+    format: { kind: 'choice', options: [{ id: 'a' }, { id: 'b' }] },
+    answer: { kind: 'choice', id: 'a' },
+    ...(withRhythm ? { rhythm: { bars: [{ beatsPerBar: 4, beatUnit: 4 }], metronome: 'metered' as const } } : {}),
+  })
+  const metronomeEntry = (withRhythm: boolean): GeneratorEntry => ({
+    mode: 'major',
+    context: 'metronome',
+    byModality: { recognize: () => fakeContent(withRhythm), sing: () => fakeContent(withRhythm), notate: () => fakeContent(withRhythm) },
+  })
+  const rSpec = spec({ kpId: 'rhythm:quarter', track: 'R', contextLevel: 1 })
+
+  it('节拍器语境：一小节预备拍（默认 90 bpm），内容在其后', () => {
+    const ex = generateWith(metronomeEntry(true), rSpec, c)
+    expect(ex.contentStartSec).toBeCloseTo(4 * (60 / 90), 12)
+    expect(ex.plan.events.some((e) => Math.abs(e.atSec - ex.contentStartSec) < 1e-9 && Math.round(freqToMidi(e.freqHz)) === 60)).toBe(true)
+  })
+
+  it('节拍器语境：点击在主音上方一个八度；反馈先放一小节强拍加重的节拍器', () => {
+    const ex = generateWith(metronomeEntry(true), rSpec, c)
+    const clickMidi = 60 + CLICK_OCTAVE
+    expect(ex.plan.events.some((e) => Math.round(freqToMidi(e.freqHz)) === clickMidi)).toBe(true)
+    const anchor = ex.feedback.replay.events.slice(0, 4)
+    expect(anchor.every((e) => Math.round(freqToMidi(e.freqHz)) === clickMidi)).toBe(true)
+    expect(anchor[0].gain).toBe(CLICK_GAIN_ACCENT)
+  })
+
+  it('节拍器语境缺 rhythm：抛错，消息含定位信息', () => {
+    expect(() => generateWith(metronomeEntry(false), rSpec, c)).toThrow(/rhythm:quarter@recognize/)
+  })
+
+  it('调性语境：generateWith 与 generate 结果一致', () => {
+    const s = spec({ kpId: 'degree:major:re', contextLevel: 2, variationLevel: 4, seed: 9 })
+    const entry = lookupGenerator(s.kpId)
+    if (!entry) throw new Error('缺生成器')
+    expect(generateWith(entry, s, c)).toEqual(generate(s, c))
   })
 })
