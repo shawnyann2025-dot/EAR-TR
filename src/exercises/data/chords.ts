@@ -149,7 +149,7 @@ export interface BasslinePattern {
   steps: readonly { chordId: string; inversion: number }[]
 }
 
-/** 低音线模板（大调）：四条走向各不相同，两条下行两条上行 */
+/** 低音线模板（大调）：四条走向各不相同，一条下行（do-ti-la-fa）、三条上行 */
 export const BASSLINE_PATTERNS: readonly BasslinePattern[] = [
   { id: 'do-ti-la-fa', steps: [{ chordId: 'I', inversion: 0 }, { chordId: 'V', inversion: 1 }, { chordId: 'vi', inversion: 0 }, { chordId: 'IV', inversion: 0 }] },
   { id: 'do-mi-fa-sol', steps: [{ chordId: 'I', inversion: 0 }, { chordId: 'I', inversion: 1 }, { chordId: 'IV', inversion: 0 }, { chordId: 'V', inversion: 0 }] },
