@@ -1,4 +1,4 @@
-import { framesOf } from './synth'
+import { framesOf } from './frames'
 import { HOP_SIZE, SAMPLE_RATE, YIN_THRESHOLD, yinFrame, type PitchFrame } from './yin'
 
 export const VOICED_RMS_FACTOR = 2

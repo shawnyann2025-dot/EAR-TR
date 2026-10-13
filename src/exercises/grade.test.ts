@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { buildCurriculum } from '../curriculum/curriculum'
+import { generate } from './generate'
 import { answerAsResponse, grade } from './grade'
 import type { Exercise } from './types'
 
@@ -182,12 +184,9 @@ describe('grade：打拍相位（maxShiftSec）', () => {
   })
 })
 
-import { buildCurriculum as buildCurriculumForPitch } from '../curriculum/curriculum'
-import { generate as generateForPitch } from './generate'
-
 describe('grade：唱模态检测分支（P-4 spec §3.4）', () => {
-  const c = buildCurriculumForPitch()
-  const ex = generateForPitch(
+  const c = buildCurriculum()
+  const ex = generate(
     { kpId: 'degree:major:mi', modality: 'sing', track: 'T', contextLevel: 1, variationLevel: 1, difficultyStep: 2, seed: 5, segment: 'focus' },
     c,
   )

@@ -483,7 +483,7 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 
 ### 9.1 音高检测
 
-- 算法：**YIN**，运行于 AudioWorklet
+- 算法：**YIN**，运行于专用 Worker；AudioWorklet 只负责切帧并转发（见 P-4 spec §4.1）
 - 48 kHz / 帧长 2048 / hop 512
 - 输出：基频 f0 + 置信度
 
