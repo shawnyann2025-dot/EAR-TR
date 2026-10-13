@@ -4,8 +4,10 @@ import type { DisplayScheme } from '../../music/display'
 import { degreeLabel, labelFor, patternLabel, showsSingTargets } from '../labels'
 import { tapWindowEndCtxSec, tapsRelativeToContent, type TapClock } from '../tapTiming'
 import { ChoiceControl } from './ChoiceControl'
+import type { SingMic } from '../singMic'
 import { PitchControl } from './PitchControl'
 import { SequenceControl } from './SequenceControl'
+import { SingDetectControl } from './SingDetectControl'
 import { TapControl } from './TapControl'
 
 export interface AnswerClock {
@@ -23,6 +25,7 @@ export interface AnswerAreaProps {
   schedule: (seconds: number, fn: () => void) => () => void
   onPlayTarget: () => void
   onResponse: (r: Response) => void
+  sing?: { mode: 'detect' | 'self'; mic: SingMic | null }
 }
 
 export function AnswerArea(props: AnswerAreaProps) {
@@ -39,6 +42,19 @@ export function AnswerArea(props: AnswerAreaProps) {
       return <SequenceControl length={f.length} alphabet={f.alphabet.map((o) => o.id)} label={label} enabled={answering} onSubmit={(ids) => props.onResponse({ kind: 'sequence', ids })} />
     case 'pitch': {
       const text = showsSingTargets(exercise.prompt) ? f.targets.map((t) => degreeLabel(t.degree, scheme, ctx.mode)).join(' ') : null
+      if (props.sing?.mode === 'detect' && props.sing.mic) {
+        return (
+          <SingDetectControl
+            targetsText={text}
+            targetCount={f.targets.length}
+            enabled={answering}
+            mic={props.sing.mic}
+            schedule={props.schedule}
+            onPlayTarget={props.onPlayTarget}
+            onResponse={props.onResponse}
+          />
+        )
+      }
       return <PitchControl targetsText={text} enabled={answering} onPlayTarget={props.onPlayTarget} onAssess={(ok) => props.onResponse({ kind: 'pitch', selfAssessedCorrect: ok })} />
     }
     case 'tap':

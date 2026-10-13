@@ -63,9 +63,28 @@ export function FeedbackPanel(props: {
     ex.spec.track === 'T' && ex.format.kind === 'choice' && ex.answer.kind === 'choice' && isDegree(ex.answer.id)
       ? { degrees: ex.format.options.map((o) => o.id), correct: ex.answer.id }
       : null
+  const detail = grade.detail
+  const sungMarks =
+    ex.answer.kind === 'pitch' && detail.kind === 'pitch' && detail.perTarget
+      ? ex.answer.targets.map((t, i) => ({ label: degreeLabel(t.degree, props.scheme, ex.resolved.key.mode), ok: !!detail.perTarget?.[i] }))
+      : null
+  const sangNothing = props.response?.kind === 'pitch' && 'sungHz' in props.response && props.response.sungHz.length === 0
   return (
     <div className="feedback wrong">
-      <p>{ex.answer.kind === 'pitch' ? '再听一遍目标音，对照自己唱的' : `正确答案：${answerText(ex, props.scheme)}`}</p>
+      <p>
+        {ex.answer.kind === 'pitch'
+          ? sangNothing
+            ? '没听到你唱，听一遍目标音'
+            : '再听一遍目标音，对照自己唱的'
+          : `正确答案：${answerText(ex, props.scheme)}`}
+      </p>
+      {sungMarks && !sangNothing && (
+        <div className="scale-bar sing-marks" aria-label="逐音结果">
+          {sungMarks.map((m, i) => (
+            <span key={i} className="scale-cell" data-mark={m.ok ? 'correct' : 'chosen'}>{m.label}</span>
+          ))}
+        </div>
+      )}
       {bar && <ScaleBar degrees={bar.degrees} chosen={chosen} correct={bar.correct} scheme={props.scheme} mode={ex.resolved.key.mode} />}
       <div className="row">
         <button type="button" onClick={props.onReplay}>再听一遍</button>

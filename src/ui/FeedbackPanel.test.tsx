@@ -51,3 +51,25 @@ describe('ScaleBar', () => {
     expect(document.querySelector('[data-mark="both"]')?.textContent).toBe('3')
   })
 })
+
+describe('FeedbackPanel：唱题逐音反馈', () => {
+  const singEx = generate({ kpId: 'degree:major:mi', modality: 'sing', track: 'T', contextLevel: 1, variationLevel: 1, difficultyStep: 3, seed: 2, segment: 'focus' }, c)
+
+  it('逐音标 ✓ / ✗', () => {
+    if (singEx.answer.kind !== 'pitch') throw new Error()
+    const n = singEx.answer.targets.length
+    const perTarget = Array.from({ length: n }, (_, i) => i !== 0)
+    render(
+      <FeedbackPanel exercise={singEx} grade={{ correct: false, detail: { kind: 'pitch', perTarget, centsOff: perTarget.map(() => 0) } }} response={{ kind: 'pitch', sungHz: Array(n).fill(200) }} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />,
+    )
+    const marks = [...document.querySelectorAll('.sing-marks .scale-cell')].map((e) => e.getAttribute('data-mark'))
+    expect(marks).toEqual(perTarget.map((ok) => (ok ? 'correct' : 'chosen')))
+  })
+
+  it('什么都没唱：提示「没听到你唱」', () => {
+    render(
+      <FeedbackPanel exercise={singEx} grade={{ correct: false, detail: { kind: 'pitch', perTarget: [false], centsOff: [null] } }} response={{ kind: 'pitch', sungHz: [] }} scheme="solfege" onSlow={vi.fn()} onReplay={vi.fn()} onNext={vi.fn()} />,
+    )
+    expect(screen.getByText(/没听到你唱/)).toBeTruthy()
+  })
+})
