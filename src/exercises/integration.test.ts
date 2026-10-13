@@ -9,7 +9,7 @@ const c = buildCurriculum()
 
 /**
  * P-2b spec §11 第 4 条：拿仿真 180 天里调度器真实发出的规格（已由运行时写入
- * 阶梯档位）逐道生成。P-2b-H 覆盖 T/H 轨；P-2b-R 放宽到全量。
+ * 阶梯档位）逐道生成。P-2b-R 起覆盖全部三条轨道。
  */
 function collectTrackSpecs(learner: typeof AVERAGE_LEARNER): ExerciseSpec[] {
   const specs: ExerciseSpec[] = []
@@ -19,13 +19,13 @@ function collectTrackSpecs(learner: typeof AVERAGE_LEARNER): ExerciseSpec[] {
     minutesPerDay: 25,
     seed: 4242,
     trace: (t) => {
-      if (t.spec.track === 'T' || t.spec.track === 'H') specs.push(t.spec)
+      specs.push(t.spec)
     },
   })
   return specs
 }
 
-describe('集成守卫：调度器真实发出的 T/H 轨规格都能生成并判定', () => {
+describe('集成守卫：调度器真实发出的全部规格都能生成并判定', () => {
   for (const [name, learner] of [['普通学习者', AVERAGE_LEARNER], ['慢学习者', SLOW_LEARNER]] as const) {
     it(name, () => {
       const specs = collectTrackSpecs(learner)
@@ -35,6 +35,8 @@ describe('集成守卫：调度器真实发出的 T/H 轨规格都能生成并�
       // H 轨确实被覆盖到了，且覆盖面不止一两个知识点
       const hKps = new Set(specs.filter((s) => s.track === 'H').map((s) => s.kpId))
       expect(hKps.size).toBeGreaterThanOrEqual(5)
+      const rKps = new Set(specs.filter((s) => s.track === 'R').map((s) => s.kpId))
+      expect(rKps.size).toBeGreaterThanOrEqual(5)
 
       const failures: string[] = []
       for (const s of specs) {
