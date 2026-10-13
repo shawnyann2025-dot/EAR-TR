@@ -13,6 +13,8 @@ import {
 } from './types'
 
 const clone = <T>(x: T): T => structuredClone(x)
+/** 按 UTF-16 码元序比较，与 IndexedDB 键排序一致；导出顺序两种实现统一 */
+const byKey = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const sessionKey = (day: number, sessionNo: number) => `${day}:${sessionNo}`
 
 /** 内存实现：测试用，也是隐私模式下的降级（主 spec §12） */
@@ -68,9 +70,9 @@ export class MemoryRepository implements Repository {
       schemaVersion: SCHEMA_VERSION,
       exportedAt,
       profile: this.profile,
-      mastery: [...this.mastery.entries()],
+      mastery: [...this.mastery.entries()].sort((a, b) => byKey(a[0], b[0])),
       attempts: this.attempts,
-      attemptAggregates: this.aggregates,
+      attemptAggregates: [...this.aggregates].sort((a, b) => byKey(a.key, b.key)),
       sessions: [...this.sessions.values()].sort((a, b) => a.day - b.day || a.sessionNo - b.sessionNo),
       gates: this.gates,
     })
