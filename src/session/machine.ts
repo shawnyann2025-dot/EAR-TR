@@ -1,9 +1,12 @@
-import { masteryKey, type Track } from '../curriculum/knowledgePoints'
+import { masteryKey, type MasteryKey, type Track } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
 import { generate, grade } from '../exercises/generate'
+import { evaluateGate, nextPhase } from '../scheduling/gate'
+import type { MasteryState } from '../scheduling/mastery'
 import type { SessionPlan } from '../scheduling/scheduler'
-import { prepareItem, recordAnswer } from './item'
-import type {
+import { prepareItem, recordAnswer, stagnationUpdates } from './item'
+import {
+  BOSS_STANDIN_ACCURACY,
   CurrentItem,
   ReduceContext,
   ReduceResult,
@@ -13,6 +16,7 @@ import type {
   SessionRecord,
   SessionState,
   SessionSummary,
+  Tally,
 } from './types'
 
 const zeroByTrack = (): Record<Track, number> => ({ T: 0, H: 0, R: 0 })
@@ -100,11 +104,44 @@ function present(state: SessionState, ctx: ReduceContext, effects: SessionEffect
   return finish(s, ctx, effects, true)
 }
 
-/** 结束流程。Task 5 补全跨天护栏、关卡与升阶段 */
-function finish(state: SessionState, _ctx: ReduceContext, effects: SessionEffect[], _full: boolean): ReduceResult {
-  const summary = baseSummary(state)
-  const done: SessionState = { ...state, phase: 'done', current: null, summary }
+/** 实战关替身（P-3 spec D3）：本场实战关段至少答过 1 题，且正确率达标 */
+export function bossPassed(boss: Tally): boolean {
+  return boss.attempted > 0 && boss.correct / boss.attempted >= BOSS_STANDIN_ACCURACY
+}
+
+/**
+ * 结束流程（P-3 spec §3.7）。
+ * full = 计划用完；endEarly 时为 false——不完整的会话不评估关卡、不升阶段。
+ */
+function finish(state: SessionState, ctx: ReduceContext, effects: SessionEffect[], full: boolean): ReduceResult {
   const out = [...effects]
+  const summary = baseSummary(state)
+
+  if (persists(state)) {
+    // ① 跨天护栏：停滞的 key 拆解后写回；关卡评估用合并后的掌握度
+    const merged = new Map<MasteryKey, MasteryState>(ctx.mastery)
+    for (const u of stagnationUpdates(ctx.curriculum, state.phaseId, state.day, ctx.mastery)) {
+      merged.set(u.key, u.state)
+      out.push({ type: 'saveMastery', key: u.key, state: u.state })
+    }
+
+    // ② 关卡：三模态齐平 + 实战关替身
+    if (full) {
+      const boss = bossPassed(state.boss)
+      const gate = evaluateGate(ctx.curriculum, merged, state.phaseId, boss)
+      const to = gate.passed ? nextPhase(state.phaseId) : null
+      if (to) out.push({ type: 'advancePhase', from: state.phaseId, to, day: state.day })
+      summary.gate = {
+        evaluated: true,
+        passed: gate.passed,
+        blockingKeys: gate.blockingKeys.length,
+        bossSatisfied: gate.bossSatisfied,
+        advancedTo: to,
+      }
+    }
+  }
+
+  const done: SessionState = { ...state, phase: 'done', current: null, summary }
   if (persists(state)) out.push({ type: 'saveSession', record: toRecord(done) })
   out.push({ type: 'ended', summary })
   return { state: done, effects: out }
