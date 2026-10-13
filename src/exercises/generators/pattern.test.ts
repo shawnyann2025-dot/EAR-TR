@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildCurriculum } from '../../curriculum/curriculum'
-import { METERS, patternById, patternsOf } from '../data/rhythms'
+import { METERS, PATTERNS, patternById, patternsOf } from '../data/rhythms'
 import { DIFFICULTY_TABLE } from '../difficulty'
 import { PATTERN_GENERATORS, patternPassage } from './pattern'
 import { barSec, patternsUpTo } from './rhythmCommon'
@@ -28,7 +28,7 @@ describe('patternPassage', () => {
 describe('音型·听辨', () => {
   it('放出目标自己的音型之一；选项来自音型池并含答案；按拍号节拍器', () => {
     for (const kp of ['rhythm:quarter', 'rhythm:synco-8', 'rhythm:tie-across-bar']) {
-      const own = patternsOf(kp).map((p) => p.id)
+      const own = PATTERNS.filter((p) => p.ownerKpId === kp).map((p) => p.id)
       const pool = patternsUpTo(c, kp).map((p) => p.id)
       for (const seed of SEEDS) {
         const r = PATTERN_GENERATORS.recognize(generatorInput(kp, 'recognize', { seed, step: 5 }))
@@ -43,6 +43,16 @@ describe('音型·听辨', () => {
         expect(r.prompt).toBe('which-pattern')
       }
     }
+  })
+
+  it('听辨可抽到对比音型作答案：两小节题的答案不恒为连线音型', () => {
+    const answers = new Set<string>()
+    for (const seed of SEEDS) {
+      const r = PATTERN_GENERATORS.recognize(generatorInput('rhythm:tie-across-bar', 'recognize', { seed, step: 5 }))
+      if (r.answer.kind !== 'choice') throw new Error('格式错')
+      answers.add(r.answer.id)
+    }
+    expect([...answers].sort()).toEqual(['q-q-q-e|q-q-q-q', 'q-q-q-e~q-q-q'])
   })
 
   it('选项与目标小节数相同：两小节题只给两小节选项，单小节题不出现两小节选项', () => {

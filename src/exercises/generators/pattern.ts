@@ -1,6 +1,6 @@
 import type { Modality } from '../../curriculum/knowledgePoints'
 import type { Meter, TimedOnset } from '../../music/rhythm'
-import { METERS, patternsOf, type PatternDef } from '../data/rhythms'
+import { METERS, PATTERNS, patternsOf, type PatternDef } from '../data/rhythms'
 import { difficultyParams } from '../difficulty'
 import { pickOptions } from '../pools'
 import type { ContentResult, Generator, GeneratorInput } from '../types'
@@ -41,7 +41,10 @@ export function patternPassage(
 }
 
 const recognizePattern: Generator = (input): ContentResult => {
-  const p = input.rng.pick(ownPatterns(input))
+  // 听辨时对比音型也可作答案——否则两小节题的答案恒为连线音型，不听也能答对
+  const all = PATTERNS.filter((x) => x.ownerKpId === input.spec.kpId)
+  if (all.length === 0) throw new Error(`${input.spec.kpId} 没有音型`)
+  const p = input.rng.pick(all)
   const passage = patternPassage([p], input)
   const notes = rhythmNotes(passage.onsets, input)
   const pool = patternsUpTo(input.curriculum, input.spec.kpId)
