@@ -265,7 +265,19 @@ export function generateBoss(c: Curriculum, phaseId: PhaseId, seed: number): Bos
     if (slot.forced) pick = options[nearest]
     else {
       const delta = rng.next() < 0.1 ? (rng.next() < 0.5 ? -3 : 3) : rng.pick([-2, -1, -1, 0, 1, 1, 2])
-      pick = options[Math.max(0, Math.min(options.length - 1, nearest + delta))]
+      // 越界时反射而不是钳在边上（钳住会让音域底部的低音 sol 变成「粘住」的地板）
+      const inRange = (j: number) => j >= 0 && j < options.length
+      let j = nearest + delta
+      if (!inRange(j)) j = nearest - delta
+      if (inRange(j)) pick = options[j]
+      else {
+        // 两个方向都不行：取离当前音最近、且不是同一个音的可行音（没有才原地）
+        const moves = options.filter((p) => p.pitch !== prev)
+        pick =
+          moves.length > 0
+            ? moves.reduce((best, p) => (Math.abs(p.pitch - prev) < Math.abs(best.pitch - prev) ? p : best))
+            : options[nearest]
+      }
     }
     prev = pick.pitch
     melody.push({

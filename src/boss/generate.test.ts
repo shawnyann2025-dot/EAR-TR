@@ -111,6 +111,24 @@ describe('generateBoss：音乐性约束', () => {
       }
     }
   })
+  it('旋律不在同一音上打转：同音（音级与八度都相同）连续不足 8 个，同音反复率 ≤ 0.22', () => {
+    for (const phaseId of PHASES) {
+      let repeats = 0
+      let pairs = 0
+      for (let seed = 0; seed < 200; seed++) {
+        const mel = generateBoss(c, phaseId, seed).piece.melody
+        let run = 1
+        for (let i = 1; i < mel.length; i++) {
+          pairs++
+          const same = mel[i].degree === mel[i - 1].degree && mel[i].octave === mel[i - 1].octave
+          if (same) repeats++
+          run = same ? run + 1 : 1
+          expect(run).toBeLessThan(8)
+        }
+      }
+      expect(repeats / pairs).toBeLessThanOrEqual(0.22)
+    }
+  })
   it('半音外色和弦（bVI、bVII、V/V）的小节里，旋律音不与和弦音成小二度', () => {
     let checked = 0
     for (let seed = 0; seed < 50; seed++) {
