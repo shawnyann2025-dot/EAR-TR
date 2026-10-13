@@ -154,4 +154,78 @@ describe('音域测定（P-4 spec §4.3）', () => {
     await act(async () => { startDone(); await startGate })
     expect(events).toEqual(['start', 'started', 'stop'])
   })
+
+  it('收音中卸载：close 在 stop 之后，且 start 落定后不再起计时器', async () => {
+    const events: string[] = []
+    let startDone!: () => void
+    const startGate = new Promise<void>((r) => { startDone = r })
+    const mic: LazyMic = {
+      ...scriptedMic([]),
+      async start() { events.push('start'); await startGate; events.push('started') },
+      async stop() { events.push('stop'); return [] },
+      close() { events.push('close') },
+    }
+    await setup(mic)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始测定' })) })
+    await screen.findByRole('button', { name: '唱好了' })
+    cleanup()
+    expect(events).toEqual(['start'])
+    await act(async () => { startDone(); await startGate })
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+    expect(events).toEqual(['start', 'started', 'stop', 'close'])
+  })
+
+  it('stop 进行中卸载：等 stop 落定后才 close，且不再开始下一步', async () => {
+    const events: string[] = []
+    let stopDone!: () => void
+    const stopGate = new Promise<void>((r) => { stopDone = r })
+    const mic: LazyMic = {
+      ...scriptedMic([]),
+      async start() { events.push('start') },
+      async stop() { events.push('stop'); await stopGate; events.push('stopped'); return [{ startSec: 0, endSec: 1.5, medianHz: midiToFreq(45) }] },
+      close() { events.push('close') },
+    }
+    await setup(mic)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始测定' })) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '唱好了' })) })
+    expect(events).toEqual(['start', 'stop'])
+    cleanup()
+    await act(async () => { await Promise.resolve() })
+    expect(events).toEqual(['start', 'stop'])
+    await act(async () => { stopDone(); await stopGate })
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+    expect(events).toEqual(['start', 'stop', 'stopped', 'close'])
+  })
+
+  it('打开/校准期间卸载：不进入收音，麦克风被释放', async () => {
+    const events: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const mic: LazyMic = {
+      ...scriptedMic([]),
+      async ensure() { events.push('ensure'); await gate; events.push('ensured') },
+      async start() { events.push('start') },
+      close() { events.push('close') },
+    }
+    await setup(mic)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始测定' })) })
+    cleanup()
+    await act(async () => { release(); await gate })
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+    expect(events).not.toContain('start')
+    expect(events).toContain('close')
+  })
+
+  it('保存成功后释放麦克风', async () => {
+    const events: string[] = []
+    const mic: LazyMic = { ...scriptedMic([45, 67]), close() { events.push('close') } }
+    await setup(mic)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始测定' })) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '唱好了' })) })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '唱好了' })) })
+    await screen.findByText(/A2 – G4/)
+    events.length = 0
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '保存' })) })
+    expect(events).toContain('close')
+  })
 })

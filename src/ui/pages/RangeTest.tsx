@@ -31,27 +31,37 @@ export function RangeTest(props: { onDone?: () => void }) {
   /** 已发起 start 且尚未 stop（卸载时据此收尾） */
   const holding = useRef(false)
   const finishing = useRef(false)
+  /** 进行中的 mic.stop()（卸载时据此等它落定再 close） */
+  const stopP = useRef<Promise<unknown> | null>(null)
+  const mounted = useRef(true)
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
       if (timer.current) clearTimeout(timer.current)
       timer.current = null
+      // 顺序约定：close 必须在进行中的 start/stop 落定之后，释放麦克风与录音指示
+      let settled: Promise<unknown> = Promise.resolve()
       if (holding.current && startP.current) {
         holding.current = false
         // 卸载于收音中：等 start 落定再停（start 被拒则无需 stop）
-        void startP.current.then(() => mic.stop()).then(() => {}, () => {})
+        settled = startP.current.then(() => mic.stop())
+      } else if (stopP.current) {
+        settled = stopP.current
       }
-    },
-    [mic],
-  )
+      void settled.then(() => {}, () => {}).then(() => mic.close())
+    }
+  }, [mic])
 
   async function save(vocalRange: VocalRange | null) {
     try {
       await runtime.updateProfile({ vocalRange })
+      mic.close()
       props.onDone?.()
     } catch (e) {
-      setError(msg(e))
+      if (mounted.current) setError(msg(e))
     }
   }
 
@@ -63,9 +73,11 @@ export function RangeTest(props: { onDone?: () => void }) {
     holding.current = true
     try {
       await p
+      if (!mounted.current) return
       timer.current = setTimeout(() => void finishHold(which, low), HOLD_SEC * 1000)
     } catch (e) {
       holding.current = false
+      if (!mounted.current) return
       setError(msg(e))
       setStep({ kind: 'intro' })
     }
@@ -83,8 +95,18 @@ export function RangeTest(props: { onDone?: () => void }) {
       } catch {
         return
       }
+      if (!mounted.current) return // 卸载清理已负责 stop 与 close
       holding.current = false
-      const note = pickHeldNote(await mic.stop())
+      const sp = mic.stop()
+      stopP.current = sp
+      let segs: Awaited<typeof sp>
+      try {
+        segs = await sp
+      } finally {
+        if (stopP.current === sp) stopP.current = null
+      }
+      if (!mounted.current) return
+      const note = pickHeldNote(segs)
       if (which === 'low') {
         await startHold('high', note)
         return
@@ -92,6 +114,7 @@ export function RangeTest(props: { onDone?: () => void }) {
       const check = validateRange(low, note)
       setStep(check.ok ? { kind: 'result', range: check.range } : { kind: 'invalid', reason: check.reason })
     } catch (e) {
+      if (!mounted.current) return
       setError(msg(e))
       setStep({ kind: 'intro' })
     }
@@ -101,10 +124,13 @@ export function RangeTest(props: { onDone?: () => void }) {
     setError(null)
     try {
       await audio.unlock()
+      if (!mounted.current) return
       setStep({ kind: 'opening' })
-      await mic.ensure({ onCalibrating: () => setStep({ kind: 'calibrating' }) })
+      await mic.ensure({ onCalibrating: () => { if (mounted.current) setStep({ kind: 'calibrating' }) } })
+      if (!mounted.current) return
       await startHold('low', null)
     } catch (e) {
+      if (!mounted.current) return
       setError(msg(e))
       setStep({ kind: 'intro' })
     }
