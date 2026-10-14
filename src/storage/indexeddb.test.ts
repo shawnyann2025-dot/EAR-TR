@@ -109,3 +109,28 @@ describe('deleteIndexedDb', () => {
     expect(await b.loadProfile()).toBeNull()
   })
 })
+
+describe('IndexedDB v1 → v2 迁移', () => {
+  it('旧库（v1，无 bossAttempts 仓库）打开后数据不变、可写尝试', async () => {
+    const env = fresh()
+    await new Promise<void>((resolve, reject) => {
+      const r = env.factory.open(env.name, 1)
+      r.onupgradeneeded = () => {
+        const db = r.result
+        db.createObjectStore('profile')
+        db.createObjectStore('mastery')
+        db.createObjectStore('attempts', { autoIncrement: true })
+        db.createObjectStore('attemptAggregates', { keyPath: 'key' })
+        db.createObjectStore('sessions')
+        db.createObjectStore('gates', { autoIncrement: true })
+        r.transaction!.objectStore('profile').put({ id: 'old', createdAtLocalDate: '2026-10-01', phaseId: 'P2', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: 1 }, 'profile')
+      }
+      r.onsuccess = () => { r.result.close(); resolve() }
+      r.onerror = () => reject(r.error)
+    })
+    const repo = await openIndexedDbRepository(env)
+    expect((await repo.loadProfile())?.id).toBe('old')
+    await repo.appendBossAttempt({ phaseId: 'P2', day: 5, seed: 1, parts: { melody: 1 }, passed: true, at: 'x' })
+    expect(await repo.listBossAttempts()).toHaveLength(1)
+  })
+})
