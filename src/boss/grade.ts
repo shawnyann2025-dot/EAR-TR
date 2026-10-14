@@ -2,6 +2,8 @@ import { BOSS_PASS_RATIO, SHORT_PART_ALLOWED_WRONG, SHORT_PART_MAX_POSITIONS, ty
 
 export interface BossGrade {
   parts: Partial<Record<PartId, number>>
+  /** 每部分是否达标（含短部分宽限）；passed = 全部为 true */
+  partsPassed: Partial<Record<PartId, boolean>>
   passed: boolean
   marks: { melody: boolean[][]; chords?: boolean[]; rhythm?: boolean[]; meter?: boolean; newTonic?: boolean }
 }
@@ -51,6 +53,8 @@ export function gradeBoss(ch: BossChallenge, r: BossResponse): BossGrade {
     if (n < 2 || n > SHORT_PART_MAX_POSITIONS) return false
     return Math.round((1 - r) * n) <= SHORT_PART_ALLOWED_WRONG
   }
-  const passed = ch.parts.every(partPassed)
-  return { parts, passed, marks }
+  const partsPassed: Partial<Record<PartId, boolean>> = {}
+  for (const p of ch.parts) partsPassed[p] = partPassed(p)
+  const passed = ch.parts.every((p) => partsPassed[p])
+  return { parts, partsPassed, passed, marks }
 }

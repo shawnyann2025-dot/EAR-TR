@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BOSS_PARTS } from '../../boss/generate'
 import { gradeBoss, type BossGrade } from '../../boss/grade'
 import { phrasePlan, renderPiece } from '../../boss/render'
 import type { BossChallenge, BossResponse } from '../../boss/types'
 import type { PhaseId } from '../../curriculum/stages'
-import { BossResult } from '../BossResult'
+import { BossResult, PART_NAME } from '../BossResult'
 import { ChoiceControl } from '../controls/ChoiceControl'
 import { SequenceControl } from '../controls/SequenceControl'
 import { labelFor, type LabelContext } from '../labels'
@@ -30,8 +31,12 @@ export function Boss(props: { onExit: () => void }) {
   const [remaining, setRemaining] = useState<number | null>(null)
   const [replays, setReplays] = useState(FULL_REPLAYS)
   const [resp, setResp] = useState<BossResponse>({ melody: [] })
+  const [played, setPlayed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const inFlight = useRef(false)
   const [phraseDone, setPhraseDone] = useState<Record<string, boolean>>({})
   const rendered = useMemo(() => (ch ? renderPiece(ch.piece) : null), [ch])
+  const phaseId = useSnapshot().profile?.phaseId
   const active = step.kind !== 'intro' && step.kind !== 'result'
   useWakeLock(active)
 
@@ -46,6 +51,7 @@ export function Boss(props: { onExit: () => void }) {
   }
 
   async function begin() {
+    audio.stopAll()
     setError(null)
     try {
       await audio.unlock()
@@ -54,6 +60,7 @@ export function Boss(props: { onExit: () => void }) {
       setResp({ melody: c.phrases.map(() => []) })
       setPhraseDone({})
       setReplays(FULL_REPLAYS)
+      setPlayed(false)
       setStep({ kind: 'listen' })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -61,18 +68,25 @@ export function Boss(props: { onExit: () => void }) {
   }
 
   async function submit(final: BossResponse) {
-    if (!ch) return
+    if (!ch || inFlight.current) return
+    inFlight.current = true
+    setSubmitting(true)
     const grade = gradeBoss(ch, final)
     try {
       const r = await runtime.recordBossAttempt(ch, grade)
       const s = await runtime.bossStatus()
       setRemaining(s.remainingToday)
+      audio.stopAll()
       setStep({ kind: 'result', grade, advancedTo: r.advancedTo, remaining: s.remainingToday })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      inFlight.current = false
+      setSubmitting(false)
     }
   }
 
+  const errorLine = error && <p className="error">{error}</p>
   const afterPhrases = () => (ch!.parts.includes('newTonic') ? setStep({ kind: 'newTonic' }) : void submit(resp))
 
   if (step.kind === 'intro') {
@@ -81,8 +95,9 @@ export function Boss(props: { onExit: () => void }) {
         <h1>实战关</h1>
         <p>先听一遍整曲，再一句一句写出来。每句可以无限重听；整曲开场听一次后最多再听 {FULL_REPLAYS} 次。</p>
         <p>每个部分 ≥ 90% 才算通过（和弦、节奏可以错 1 个）。</p>
+        {phaseId && <p>本关包括：{BOSS_PARTS[phaseId].map((p) => PART_NAME[p]).join('、')}。</p>}
         {remaining !== null && <p>今天还能挑战 {remaining} 次。</p>}
-        {error && <p className="error">{error}</p>}
+        {errorLine}
         <button type="button" className="primary big" disabled={remaining === 0} onClick={() => void begin()}>开始</button>
         <button type="button" onClick={props.onExit}>返回</button>
       </main>
@@ -95,7 +110,9 @@ export function Boss(props: { onExit: () => void }) {
     return (
       <main className="page boss">
         <h1>{step.grade.passed ? '通过！' : '这次没过'}</h1>
-        {step.grade.passed && <p className="good">{step.advancedTo ? `升入 ${step.advancedTo}！` : '全部阶段完成！'}</p>}
+        {step.grade.passed && ch.piece.phaseId === 'P5' && <p className="good">全部阶段完成！</p>}
+        {step.grade.passed && ch.piece.phaseId !== 'P5' && step.advancedTo && <p className="good">升入 {step.advancedTo}！</p>}
+        {errorLine}
         <BossResult challenge={ch} response={resp} grade={step.grade} scheme={scheme} />
         {!step.grade.passed &&
           (step.remaining > 0 ? (
@@ -118,8 +135,9 @@ export function Boss(props: { onExit: () => void }) {
     return (
       <main className="page boss">
         <p>先完整听一遍。</p>
-        <button type="button" className="primary big" onClick={() => play(rendered.plan)}>播放整曲</button>
-        <button type="button" onClick={() => setStep(ch.parts.includes('meter') ? { kind: 'meter' } : { kind: 'phrase', i: 0 })}>开始作答</button>
+        <button type="button" className="primary big" disabled={played} onClick={() => { setPlayed(true); play(rendered.plan) }}>播放整曲</button>
+        {errorLine}
+        <button type="button" disabled={!played} onClick={() => setStep(ch.parts.includes('meter') ? { kind: 'meter' } : { kind: 'phrase', i: 0 })}>开始作答</button>
       </main>
     )
   }
@@ -129,6 +147,7 @@ export function Boss(props: { onExit: () => void }) {
       <main className="page boss">
         <p className="prompt-text">这首曲子是几拍子？（答后不能修改）</p>
         {fullReplay}
+        {errorLine}
         <section className="answer-zone">
           <ChoiceControl
             ids={ch.alphabets.meter!}
@@ -145,11 +164,12 @@ export function Boss(props: { onExit: () => void }) {
     return (
       <main className="page boss">
         <p className="prompt-text">新调的主音是原调的哪个音级？</p>
+        {errorLine}
         <section className="answer-zone">
           <ChoiceControl
             ids={ch.alphabets.newTonic!}
             label={lab('new-tonic-degree')}
-            enabled
+            enabled={!submitting}
             onAnswer={(id) => { const final = { ...resp, newTonic: id }; setResp(final); void submit(final) }}
           />
         </section>
@@ -187,6 +207,7 @@ export function Boss(props: { onExit: () => void }) {
         <button type="button" onClick={() => play(phrasePlan(rendered, i))}>重听本句</button>
         {fullReplay}
       </div>
+      {errorLine}
       {newKey && <p className="small">第 5–8 小节按新调标注</p>}
       <section className="answer-zone">
         {groups.map((g) =>
@@ -206,7 +227,7 @@ export function Boss(props: { onExit: () => void }) {
         <button
           type="button"
           className="primary"
-          disabled={!allDone}
+          disabled={!allDone || submitting}
           onClick={() => (last ? afterPhrases() : setStep({ kind: 'phrase', i: i + 1 }))}
         >
           {last && !ch.parts.includes('newTonic') ? '提交关卡' : '下一句'}

@@ -25,14 +25,15 @@ function fakeAudio() {
   return { audio: audio as unknown as LazyAudio, plays }
 }
 
-function fakeRuntime(ch: BossChallenge, opts: { remaining?: number } = {}) {
+function fakeRuntime(ch: BossChallenge, opts: { remaining?: number; next?: BossChallenge[] } = {}) {
+  const queue = [...(opts.next ?? [])]
   const recorded: unknown[] = []
   const snap = { profile: { id: 'p', phaseId: ch.piece.phaseId, displayScheme: 'solfege' }, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null, playback: null }
   const rt = {
     getSnapshot: () => snap,
     subscribe: () => () => {},
     bossStatus: async () => ({ phaseId: ch.piece.phaseId, masteryReady: true, blockingKeys: 0, attemptsToday: 0, remainingToday: opts.remaining ?? 3 }),
-    newBossChallenge: async () => ch,
+    newBossChallenge: async () => queue.shift() ?? ch,
     recordBossAttempt: vi.fn(async (_c: unknown, g: { passed: boolean }) => { recorded.push(g); return { advancedTo: g.passed ? 'P2' : null } }),
   }
   return { rt, recorded }
@@ -40,15 +41,15 @@ function fakeRuntime(ch: BossChallenge, opts: { remaining?: number } = {}) {
 
 const mic = { ensure: async () => {}, start: async () => {}, stop: async () => [], close() {} }
 
-function mount(ch: BossChallenge, onExit = vi.fn()) {
+function mount(ch: BossChallenge, onExit = vi.fn(), opts: { next?: BossChallenge[] } = {}) {
   const { audio, plays } = fakeAudio()
-  const { rt, recorded } = fakeRuntime(ch)
+  const { rt, recorded } = fakeRuntime(ch, opts)
   render(
     <RuntimeProvider runtime={rt as never} audio={audio} mic={mic}>
       <Boss onExit={onExit} />
     </RuntimeProvider>,
   )
-  return { plays, recorded, rt }
+  return { plays, recorded, rt, audio }
 }
 
 const label = (_ch: BossChallenge, prompt: Parameters<typeof labelFor>[1]['prompt'], id: string) =>
@@ -70,7 +71,9 @@ describe('关卡页（P-5 spec §4.2）', () => {
     const ch = generateBoss(c, 'P1', 1)
     const { plays, recorded } = mount(ch)
     await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始' })) })
+    expect(screen.getByRole('button', { name: '开始作答' })).toHaveProperty('disabled', true)
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
+    expect(screen.getByRole('button', { name: '播放整曲' })).toHaveProperty('disabled', true)
     expect(plays).toHaveLength(1)
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始作答' })) })
     // 拍号先于任何乐句
@@ -130,10 +133,12 @@ describe('关卡页（P-5 spec §4.2）', () => {
   it('中途离开不记录尝试', async () => {
     const ch = generateBoss(c, 'P2', 4)
     const onExit = vi.fn()
-    const { recorded } = mount(ch, onExit)
+    const { recorded, audio } = mount(ch, onExit)
     await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始' })) })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
+    const before = vi.mocked(audio.stopAll).mock.calls.length
     cleanup()
+    expect(vi.mocked(audio.stopAll).mock.calls.length).toBeGreaterThan(before)
     expect(recorded).toHaveLength(0)
   })
 
@@ -150,5 +155,43 @@ describe('关卡页（P-5 spec §4.2）', () => {
     }
     expect(await screen.findByText(/换一段再试/)).toBeTruthy()
     expect(document.querySelectorAll('[data-mark="chosen"]').length).toBeGreaterThan(0)
+  })
+
+  it('双击「提交关卡」只记录一次', async () => {
+    const ch = generateBoss(c, 'P2', 6)
+    const { rt } = mount(ch)
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始作答' })) })
+    for (let i = 0; i < ch.phrases.length - 1; i++) {
+      await fillSequence(ch, 'notate-melody', ch.answer.melody[i], 0)
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '下一句' })) })
+    }
+    await fillSequence(ch, 'notate-melody', ch.answer.melody[ch.phrases.length - 1], 0)
+    const btn = screen.getByRole('button', { name: '提交关卡' })
+    await act(async () => { fireEvent.click(btn); fireEvent.click(btn) })
+    expect(rt.recordBossAttempt).toHaveBeenCalledTimes(1)
+  })
+
+  it('没过后「换一段再试」：回到新关卡的听整曲步骤并重置状态', async () => {
+    const ch = generateBoss(c, 'P2', 5)
+    const ch2 = generateBoss(c, 'P2', 7)
+    const { plays } = mount(ch, vi.fn(), { next: [ch, ch2] })
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '开始' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始作答' })) })
+    for (let i = 0; i < ch.phrases.length; i++) {
+      const wrong = ch.answer.melody[i].map((d) => (d === 'do' ? 're' : 'do'))
+      await fillSequence(ch, 'notate-melody', wrong, 0)
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: i === ch.phrases.length - 1 ? '提交关卡' : '下一句' })) })
+    }
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /换一段再试/ })) })
+    expect(screen.getByRole('button', { name: '播放整曲' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: '开始作答' })).toHaveProperty('disabled', true)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始作答' })) })
+    expect(screen.getByRole('button', { name: '重听整曲（剩 3 次）' })).toBeTruthy()
+    expect(screen.getByText(new RegExp(`第 1 / ${ch2.phrases.length} 句`))).toBeTruthy()
+    expect(plays).toHaveLength(2)
   })
 })

@@ -3,7 +3,7 @@ import type { BossChallenge, BossResponse, PartId } from '../boss/types'
 import type { DisplayScheme } from '../music/display'
 import { labelFor, type LabelContext } from './labels'
 
-const PART_NAME: Record<PartId, string> = { melody: '旋律', chords: '和弦', rhythm: '节奏', meter: '拍号', newTonic: '新调主音' }
+export const PART_NAME: Record<PartId, string> = { melody: '旋律', chords: '和弦', rhythm: '节奏', meter: '拍号', newTonic: '新调主音' }
 const PROMPT: Record<'melody' | 'chords' | 'rhythm', LabelContext['prompt']> = { melody: 'notate-melody', chords: 'notate-chords', rhythm: 'notate-patterns' }
 
 function Row(props: { scheme: DisplayScheme; prompt: LabelContext['prompt']; mine: string[]; right: string[]; marks: boolean[] }) {
@@ -27,10 +27,20 @@ export function BossResult(props: { challenge: BossChallenge; response: BossResp
       <ul>
         {ch.parts.map((p) => (
           <li key={p}>
-            {PART_NAME[p]}：{Math.round((g.parts[p] ?? 0) * 100)}%
+            {PART_NAME[p]}：{Math.round((g.parts[p] ?? 0) * 100)}%（{g.partsPassed[p] ? '达标' : '未达标'}）
           </li>
         ))}
       </ul>
+      {ch.answer.meter && (
+        <p data-mark={g.marks.meter ? 'correct' : 'chosen'}>
+          拍号：你选的 {r.meter ? labelFor(r.meter, { scheme, mode: 'major', prompt: 'which-meter' }) : '—'} / 正确的 {labelFor(ch.answer.meter, { scheme, mode: 'major', prompt: 'which-meter' })}
+        </p>
+      )}
+      {ch.answer.newTonic && (
+        <p data-mark={g.marks.newTonic ? 'correct' : 'chosen'}>
+          新调主音：你选的 {r.newTonic ? labelFor(r.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' }) : '—'} / 正确的 {labelFor(ch.answer.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' })}
+        </p>
+      )}
       {ch.phrases.map((ph, i) => (
         <div key={i} className="phrase-review">
           <p>第 {i + 1} 句</p>

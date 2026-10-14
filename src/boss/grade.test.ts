@@ -73,10 +73,12 @@ describe('短部分宽限（用户裁定 2026-10-14）', () => {
     one.chords![0] = one.chords![0] === 'I' ? 'IV' : 'I'
     expect(gradeBoss(ch, one).parts.chords).toBeCloseTo(7 / 8)
     expect(gradeBoss(ch, one).passed).toBe(true)
+    expect(gradeBoss(ch, one).partsPassed.chords).toBe(true)
     const two = perfect(ch)
     two.chords![0] = two.chords![0] === 'I' ? 'IV' : 'I'
     two.chords![1] = two.chords![1] === 'I' ? 'IV' : 'I'
     expect(gradeBoss(ch, two).passed).toBe(false)
+    expect(gradeBoss(ch, two).partsPassed.chords).toBe(false)
   })
   it('P4 节奏错 1 个仍通过', () => {
     const ch = generateBoss(c, 'P4', 1)
