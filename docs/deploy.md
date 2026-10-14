@@ -13,6 +13,10 @@
 
 master 每次推送：先跑完 CI（类型、单元测试、构建、体积、e2e），通过后部署。
 
+## 验收分支自动部署
+
+合入 master 之前，`p6-pwa-release` 每次推送也会自动部署（同样先跑完 CI）。原因：「Run workflow」按钮只对已在默认分支上的工作流显示，deploy.yml 进 master 之前无法手动触发。
+
 ## 手动部署某个分支（真机验收用）
 
 GitHub 仓库 → Actions → deploy → Run workflow → 选择分支 → Run。完成后网址即为该分支的版本。验收完记得重新部署 master（或下次 master 推送时自动覆盖）。

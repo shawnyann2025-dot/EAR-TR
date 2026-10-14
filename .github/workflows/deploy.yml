@@ -1,7 +1,8 @@
 name: deploy
 on:
   push:
-    branches: [master]
+    # p6-pwa-release：真机验收期间推送即部署（workflow_dispatch 的按钮要等 deploy.yml 进了 master 才会出现）
+    branches: [master, p6-pwa-release]
   workflow_dispatch:
 
 permissions:
