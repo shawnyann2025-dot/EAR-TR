@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { DisplayScheme } from '../../music/display'
 import { localDateString } from '../../session/time'
+import { SCHEMA_VERSION } from '../../storage/types'
 import { downloadText } from '../download'
+import { PERSIST_TEXT, persistenceState, type PersistState } from '../persistence'
 import { midiName, RangeTest } from './RangeTest'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
@@ -16,6 +18,12 @@ export function Settings(props: { onBack: () => void }) {
   const snap = useSnapshot()
   const [msg, setMsg] = useState<string | null>(null)
   const [retest, setRetest] = useState(false)
+  const [persist, setPersist] = useState<PersistState | null>(null)
+  useEffect(() => {
+    let alive = true
+    void persistenceState().then((s) => { if (alive) setPersist(s) })
+    return () => { alive = false }
+  }, [])
   const scheme = snap.profile?.displayScheme ?? 'solfege'
   const today = () => localDateString(new Date())
 
@@ -86,6 +94,10 @@ export function Settings(props: { onBack: () => void }) {
         {snap.lastBackup && (
           <button type="button" onClick={() => downloadText(`ear-tr-导入前自动备份-${today()}.json`, snap.lastBackup!)}>下载导入前的自动备份</button>
         )}
+      </section>
+      <section className="about">
+        {persist && <p className="small">{PERSIST_TEXT[persist]}</p>}
+        <p className="small">版本 {__APP_VERSION__} · 数据格式 v{SCHEMA_VERSION}</p>
       </section>
     </main>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DevHarness } from './DevHarness'
 import { StorageProblem } from './pages/StorageProblem'
+import { requestPersistence } from './persistence'
 import { boot, type BootResult } from './platform'
 import { RuntimeProvider } from './RuntimeContext'
 import { Shell } from './Shell'
@@ -15,6 +16,10 @@ export function App() {
     if (isDev()) return
     boot().then(setResult, (e) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
+
+  useEffect(() => {
+    if (result?.kind === 'ready') void requestPersistence()
+  }, [result])
 
   if (isDev()) return <DevHarness />
   if (error) return <main className="page"><p className="error">启动失败：{error}</p></main>
