@@ -3,6 +3,7 @@
 - 日期：2026-08-24
 - 状态：已评审通过，待转实现计划
 - 目标平台：移动端优先的 PWA（纯前端、可离线、本地存储）
+- **状态（P-6）**：已实现离线 PWA（vite-plugin-pwa，首页提示更新）、GitHub Pages 部署与 Playwright 手机视口 e2e；见 docs/superpowers/specs/2026-10-14-p6-pwa-release-design.md 与 docs/deploy.md。
 
 ---
 
