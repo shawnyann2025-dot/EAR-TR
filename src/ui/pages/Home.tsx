@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MicError } from '../../audio/micCapture'
 import { buildCurriculum } from '../../curriculum/curriculum'
+import type { BossStatus } from '../../runtime/runtime'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
 const curriculum = buildCurriculum()
 type Status = 'notStarted' | 'inProgress' | 'mainDone'
 
-export function Home(props: { onOpenSettings: () => void }) {
+export function Home(props: { onOpenSettings: () => void; onOpenBoss: () => void }) {
   const { runtime, audio, mic, pushNotice } = useRuntime()
   const snap = useSnapshot()
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [boss, setBoss] = useState<BossStatus | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
   const aliveRef = useRef(true)
   const refresh = useCallback(async () => {
     try {
+      void runtime.bossStatus().then((b) => { if (aliveRef.current) setBoss(b) }, () => {})
       const s = await runtime.todayStatus()
       if (aliveRef.current) setStatus(s)
     } catch (e) {
@@ -86,6 +89,13 @@ export function Home(props: { onOpenSettings: () => void }) {
             <button type="button" className="primary big" disabled={busy !== null} onClick={() => void go(true)}>再练一场</button>
           </>
         )}
+        {boss && boss.masteryReady && (
+          <>
+            <button type="button" className="big" disabled={boss.remainingToday === 0} onClick={props.onOpenBoss}>挑战实战关</button>
+            {boss.remainingToday === 0 && <p className="small">今天的挑战次数已用完，明天再来</p>}
+          </>
+        )}
+        {boss && !boss.masteryReady && <p className="small">本阶段还差 {boss.blockingKeys} 项，达标后可挑战实战关</p>}
       </div>
     </main>
   )

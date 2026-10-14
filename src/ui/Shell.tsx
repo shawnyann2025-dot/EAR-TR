@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SessionState } from '../session/types'
+import { Boss } from './pages/Boss'
 import { Home } from './pages/Home'
 import { Onboarding } from './pages/Onboarding'
 import { RangeTest } from './pages/RangeTest'
@@ -12,6 +13,7 @@ export function Shell(props: { storageWarning: string | null }) {
   const { runtime, mic, notices, dismissNotice } = useRuntime()
   const snap = useSnapshot()
   const [settings, setSettings] = useState(false)
+  const [boss, setBoss] = useState(false)
   const [dismissed, setDismissed] = useState<SessionState | null>(null)
 
   const [bootError, setBootError] = useState<string | null>(null)
@@ -33,9 +35,10 @@ export function Shell(props: { storageWarning: string | null }) {
   else if (!snap.profile.placement.done) page = <Onboarding />
   else if (snap.profile.vocalRange === undefined) page = <RangeTest />
   else if (settings) page = <Settings onBack={() => setSettings(false)} />
+  else if (boss) page = <Boss onExit={() => setBoss(false)} />
   else if (s && s.phase !== 'done') page = <Practice />
   else if (s && s.phase === 'done' && dismissed !== s) page = <Summary onHome={() => setDismissed(s)} />
-  else page = <Home onOpenSettings={() => setSettings(true)} />
+  else page = <Home onOpenSettings={() => setSettings(true)} onOpenBoss={() => setBoss(true)} />
 
   return (
     <>
