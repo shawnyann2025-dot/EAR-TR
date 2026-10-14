@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "size": "node scripts/check-size.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
