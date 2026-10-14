@@ -1,4 +1,4 @@
-import { BOSS_PASS_RATIO, type BossChallenge, type BossResponse, type PartId } from './types'
+import { BOSS_PASS_RATIO, SHORT_PART_ALLOWED_WRONG, SHORT_PART_MAX_POSITIONS, type BossChallenge, type BossResponse, type PartId } from './types'
 
 export interface BossGrade {
   parts: Partial<Record<PartId, number>>
@@ -37,6 +37,20 @@ export function gradeBoss(ch: BossChallenge, r: BossResponse): BossGrade {
         break
     }
   }
-  const passed = ch.parts.every((p) => (parts[p] ?? 0) >= BOSS_PASS_RATIO - 1e-12)
+  const positions: Record<PartId, number> = {
+    melody: marks.melody.flat().length,
+    chords: marks.chords?.length ?? 0,
+    rhythm: marks.rhythm?.length ?? 0,
+    meter: 1,
+    newTonic: 1,
+  }
+  const partPassed = (p: PartId): boolean => {
+    const r = parts[p] ?? 0
+    if (r >= BOSS_PASS_RATIO - 1e-12) return true
+    const n = positions[p]
+    if (n < 2 || n > SHORT_PART_MAX_POSITIONS) return false
+    return Math.round((1 - r) * n) <= SHORT_PART_ALLOWED_WRONG
+  }
+  const passed = ch.parts.every(partPassed)
   return { parts, passed, marks }
 }

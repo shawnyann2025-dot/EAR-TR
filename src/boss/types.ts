@@ -4,6 +4,13 @@ import type { Key, ScaleDegree } from '../music/key'
 
 /** 每个部分都 ≥ 此比例才算通过（P-5 spec D2） */
 export const BOSS_PASS_RATIO = 0.9
+/**
+ * 短部分的宽限（用户裁定 2026-10-14）：可作答位置 2–SHORT_PART_MAX_POSITIONS 个的部分
+ * （和弦、节奏，每小节一个）允许错 SHORT_PART_ALLOWED_WRONG 个——否则 8 小节的 90% 等于全对。
+ * 单题部分（拍号、新调主音）仍须答对。
+ */
+export const SHORT_PART_MAX_POSITIONS = 10
+export const SHORT_PART_ALLOWED_WRONG = 1
 /** 每句小节数（P-5 spec D3） */
 export const PHRASE_BARS = 2
 /** 每天最多尝试次数（P-5 spec D2） */

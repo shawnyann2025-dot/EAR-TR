@@ -117,6 +117,7 @@ interface BossChallenge {
 - `gradeBoss(ch: BossChallenge, r: BossResponse): BossGrade`，`BossGrade = { parts: Partial<Record<PartId, number>>; passed: boolean; marks: { melody: boolean[][]; chords?: boolean[]; rhythm?: boolean[]; meter?: boolean; newTonic?: boolean } }`。只判定 `ch.parts` 里的部分；`passed` = 每个部分 ≥ `BOSS_PASS_RATIO = 0.9`（容差 1e-12）。
 - `marks` 是逐位对错，结果页的逐句对照（✓ / ✗）直接用它。
 - 显示文案复用 `src/ui/labels.ts`（音级、和弦、音型、拍号）。P-5b 的提示映射：旋律 → `notate-melody`，和弦 → `notate-chords`，节奏 → `notate-patterns`，拍号 → `which-meter`，新调主音 → `new-tonic-degree`；`mode: 'major'`。
+- **短部分宽限（用户裁定 2026-10-14）**：可作答位置 2–10 个的部分（和弦、节奏，每小节一个）允许错 1 个（8 小节对 7 个即通过）；单题部分（拍号、新调主音）仍须答对。常量 `SHORT_PART_MAX_POSITIONS = 10`、`SHORT_PART_ALLOWED_WRONG = 1`。
 
 ### 3.5 仿真可答性（`src/boss/answerability.ts`、`src/simulation/runSimulation.ts`）
 

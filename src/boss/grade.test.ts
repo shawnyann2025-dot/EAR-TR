@@ -65,3 +65,29 @@ describe('gradeBoss（P-5 spec §3.4）', () => {
     expect(g.marks.rhythm).toHaveLength(ch.piece.bars)
   })
 })
+
+describe('短部分宽限（用户裁定 2026-10-14）', () => {
+  it('8 小节和弦错 1 个仍通过，错 2 个不通过', () => {
+    const ch = generateBoss(c, 'P3', 2)
+    const one = perfect(ch)
+    one.chords![0] = one.chords![0] === 'I' ? 'IV' : 'I'
+    expect(gradeBoss(ch, one).parts.chords).toBeCloseTo(7 / 8)
+    expect(gradeBoss(ch, one).passed).toBe(true)
+    const two = perfect(ch)
+    two.chords![0] = two.chords![0] === 'I' ? 'IV' : 'I'
+    two.chords![1] = two.chords![1] === 'I' ? 'IV' : 'I'
+    expect(gradeBoss(ch, two).passed).toBe(false)
+  })
+  it('P4 节奏错 1 个仍通过', () => {
+    const ch = generateBoss(c, 'P4', 1)
+    const r = perfect(ch)
+    r.rhythm![3] = ch.alphabets.rhythm!.find((x) => x !== r.rhythm![3])!
+    expect(gradeBoss(ch, r).passed).toBe(true)
+  })
+  it('单题部分没有宽限：拍号错就不通过', () => {
+    const ch = generateBoss(c, 'P1', 5)
+    const r = perfect(ch)
+    r.meter = ch.alphabets.meter!.find((x) => x !== r.meter)!
+    expect(gradeBoss(ch, r).passed).toBe(false)
+  })
+})
