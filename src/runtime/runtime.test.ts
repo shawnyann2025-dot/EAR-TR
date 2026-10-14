@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { gradeBoss } from '../boss/grade'
 import { buildCurriculum } from '../curriculum/curriculum'
 import { fitToRange, VOICE_PRESETS } from '../pitch/range'
 import { answerAsResponse, generate as generateEx } from '../exercises/generate'
 import type { Response } from '../exercises/types'
 import type { PlaybackPlan } from '../music/playback'
-import { masteryKey } from '../curriculum/knowledgePoints'
+import { masteryKey, MODALITIES } from '../curriculum/knowledgePoints'
 import { knowledgePointsOfPhase } from '../curriculum/curriculum'
-import { MODALITIES } from '../curriculum/knowledgePoints'
 import type { MasteryState } from '../scheduling/mastery'
 import { initialMastery } from '../scheduling/mastery'
 import type { SessionRecord } from '../session/types'
@@ -463,5 +463,78 @@ describe('出题时搬入音域（P-4 spec §4.2）', () => {
     expect(cur.exercise.format.kind).toBe('pitch')
     const expected = fitToRange(generateEx(cur.spec, c), { lowMidi: 41, highMidi: 62 })
     expect(cur.exercise).toEqual(expected)
+  })
+})
+
+async function seedStrong(repo: MemoryRepository, phase: 'P1' | 'P2') {
+  for (const kp of knowledgePointsOfPhase(c, phase))
+    for (const m of MODALITIES)
+      await repo.putMastery(masteryKey(kp, m), { ...initialMastery(), stability: 40, contextLevel: 1, variationLevel: 1, window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: i, difficultyStep: 3 })), lastSeenDay: 19 })
+}
+
+describe('实战关（P-5 spec §4.1、§4.3）', () => {
+  it('掌握度未达标：bossStatus 不解锁，newBossChallenge 拒绝', async () => {
+    const rt = createRuntime(deps(new MemoryRepository()))
+    await rt.ensureProfile()
+    const s = await rt.bossStatus()
+    expect(s.masteryReady).toBe(false)
+    await expect(rt.newBossChallenge()).rejects.toThrow(/掌握度/)
+  })
+
+  it('达标后：出题、记录不通过的尝试；次数递减；第 4 次拒绝', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    expect((await rt.bossStatus()).masteryReady).toBe(true)
+    for (let i = 0; i < 3; i++) {
+      const ch = await rt.newBossChallenge()
+      const g = gradeBoss(ch, { melody: ch.answer.melody.map((p) => p.map(() => 'xx')) })
+      expect((await rt.recordBossAttempt(ch, g)).advancedTo).toBeNull()
+    }
+    expect((await rt.bossStatus()).remainingToday).toBe(0)
+    await expect(rt.newBossChallenge()).rejects.toThrow(/次数/)
+    expect(await repo.listBossAttempts('P1')).toHaveLength(3)
+  })
+
+  it('通过：升阶段、写关卡记录；每次出题的 seed 不同', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const a = await rt.newBossChallenge()
+    await rt.recordBossAttempt(a, gradeBoss(a, { melody: [] }))
+    const b = await rt.newBossChallenge()
+    expect(b.piece.seed).not.toBe(a.piece.seed)
+    const r = await rt.recordBossAttempt(b, gradeBoss(b, JSON.parse(JSON.stringify(b.answer))))
+    expect(r.advancedTo).toBe('P2')
+    expect((await repo.loadProfile())!.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P1', passedOnDay: 0 }])
+    expect(rt.getSnapshot().profile!.phaseId).toBe('P2')
+  })
+
+  it('挑战所属阶段已不是当前阶段：通过也不改 phaseId、不写关卡', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    await rt.updateProfile({ phaseId: 'P2' })
+    const r = await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+    expect(r.advancedTo).toBeNull()
+    expect((await repo.loadProfile())!.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([])
+  })
+
+  it('updateProfile 改了 displayScheme 之后通过：升阶段保留新的 displayScheme', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    await rt.updateProfile({ displayScheme: 'numeric' })
+    await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+    expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+    expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
   })
 })

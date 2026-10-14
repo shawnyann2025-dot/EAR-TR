@@ -1,8 +1,13 @@
+import { generateBoss } from '../boss/generate'
+import type { BossGrade } from '../boss/grade'
+import { BOSS_ATTEMPTS_PER_DAY, type BossChallenge } from '../boss/types'
 import type { Curriculum } from '../curriculum/curriculum'
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { PlaybackPlan, PlayOptions } from '../music/playback'
 import { fitToRange } from '../pitch/range'
 import type { MasteryState } from '../scheduling/mastery'
+import { evaluateGate, nextPhase } from '../scheduling/gate'
 import { buildSessionPlan } from '../scheduling/scheduler'
 import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
 import { dayIndex, sessionSeed } from '../session/time'
@@ -44,6 +49,14 @@ export interface RuntimeSnapshot {
   playback: { startSec: number; contentStartSec: number } | null
 }
 
+export interface BossStatus {
+  phaseId: PhaseId
+  masteryReady: boolean
+  blockingKeys: number
+  attemptsToday: number
+  remainingToday: number
+}
+
 export interface Runtime {
   getSnapshot(): RuntimeSnapshot
   subscribe(fn: (s: RuntimeSnapshot) => void): () => void
@@ -55,6 +68,9 @@ export interface Runtime {
   dispatch(event: SessionEvent): Promise<void>
   /** 合并补丁到当前 Profile 并保存（缓存与落盘同步更新） */
   updateProfile(patch: Partial<Omit<Profile, 'id' | 'schemaVersion'>>): Promise<Profile>
+  bossStatus(): Promise<BossStatus>
+  newBossChallenge(): Promise<BossChallenge>
+  recordBossAttempt(ch: BossChallenge, grade: BossGrade): Promise<{ advancedTo: PhaseId | null }>
   exportBundle(): Promise<string>
   /** 先校验（坏包抛 StorageImportError，不动任何数据），再自动备份、替换、重置缓存 */
   importBundle(json: string): Promise<void>
@@ -117,6 +133,20 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   }
 
   const today = (p: Profile) => dayIndex(p.createdAtLocalDate, deps.todayLocalDate())
+
+  async function bossStatusNow(): Promise<BossStatus> {
+    const p = await ensureProfileNow()
+    const day = today(p)
+    const gate = evaluateGate(curriculum, await repo.loadMastery(), p.phaseId, true)
+    const attemptsToday = (await repo.listBossAttempts(p.phaseId)).filter((a) => a.day === day).length
+    return {
+      phaseId: p.phaseId,
+      masteryReady: gate.blockingKeys.length === 0,
+      blockingKeys: gate.blockingKeys.length,
+      attemptsToday,
+      remainingToday: Math.max(0, BOSS_ATTEMPTS_PER_DAY - attemptsToday),
+    }
+  }
 
   async function run(effect: SessionEffect): Promise<void> {
     switch (effect.type) {
@@ -253,6 +283,38 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       notify()
       return p
     }),
+    bossStatus: () => serial(bossStatusNow),
+    newBossChallenge: () =>
+      serial(async () => {
+        const s = await bossStatusNow()
+        if (!s.masteryReady) throw new Error('掌握度还没达标，暂时不能挑战实战关')
+        if (s.remainingToday <= 0) throw new Error('今天的挑战次数已用完，明天再来')
+        const p = snapshot.profile!
+        return generateBoss(curriculum, s.phaseId, sessionSeed(p.id, today(p), 1000 + s.attemptsToday))
+      }),
+    recordBossAttempt: (ch: BossChallenge, grade: BossGrade) =>
+      serial(async () => {
+        const s = await bossStatusNow()
+        if (s.remainingToday <= 0) throw new Error('今天的挑战次数已用完，明天再来')
+        const p = snapshot.profile!
+        const day = today(p)
+        await write(() =>
+          repo.appendBossAttempt({ phaseId: ch.piece.phaseId, day, seed: ch.piece.seed, parts: { ...grade.parts } as Record<string, number>, passed: grade.passed, at: deps.nowIso() }),
+        )
+        let advancedTo: PhaseId | null = null
+        if (grade.passed && p.phaseId === ch.piece.phaseId) {
+          const to = nextPhase(p.phaseId)
+          if (to) {
+            const next = { ...p, phaseId: to }
+            set({ profile: next })
+            await write(() => repo.saveProfile(next))
+            advancedTo = to
+          }
+          await write(() => repo.putGate({ phaseId: ch.piece.phaseId, passedOnDay: day }))
+        }
+        notify()
+        return { advancedTo }
+      }),
     exportBundle: () => serial(async () => JSON.stringify(await repo.exportAll(deps.nowIso()))),
     importBundle: (json) => serial(async () => {
       const bundle = parseBundle(json) // 先校验：失败即抛，不碰任何东西
