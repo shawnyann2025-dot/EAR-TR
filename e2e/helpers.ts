@@ -10,7 +10,10 @@ export async function firstRun(page: Page) {
   await page.getByRole('button', { name: '跳过，以后再测', exact: true }).click()
   await expect(startToday(page)).toBeVisible()
   await page.getByRole('button', { name: '设置', exact: true }).click()
-  await page.getByLabel('自评', { exact: true }).check()
+  // 受控单选框：快照在异步写入 IndexedDB 后才更新，所以用 click + 等待选中，而不是 check()
+  const self = page.getByLabel('自评', { exact: true })
+  await self.click()
+  await expect(self).toBeChecked()
   await page.getByRole('button', { name: '返回', exact: true }).click()
   await expect(startToday(page)).toBeVisible()
 }
