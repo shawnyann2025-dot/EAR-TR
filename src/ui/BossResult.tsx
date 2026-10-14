@@ -33,12 +33,12 @@ export function BossResult(props: { challenge: BossChallenge; response: BossResp
       </ul>
       {ch.answer.meter && (
         <p data-mark={g.marks.meter ? 'correct' : 'chosen'}>
-          拍号：你选的 {r.meter ? labelFor(r.meter, { scheme, mode: 'major', prompt: 'which-meter' }) : '—'} / 正确的 {labelFor(ch.answer.meter, { scheme, mode: 'major', prompt: 'which-meter' })}
+          {g.marks.meter ? '✓' : '✗'} 拍号：你选的 {r.meter ? labelFor(r.meter, { scheme, mode: 'major', prompt: 'which-meter' }) : '—'} / 正确的 {labelFor(ch.answer.meter, { scheme, mode: 'major', prompt: 'which-meter' })}
         </p>
       )}
       {ch.answer.newTonic && (
         <p data-mark={g.marks.newTonic ? 'correct' : 'chosen'}>
-          新调主音：你选的 {r.newTonic ? labelFor(r.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' }) : '—'} / 正确的 {labelFor(ch.answer.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' })}
+          {g.marks.newTonic ? '✓' : '✗'} 新调主音：你选的 {r.newTonic ? labelFor(r.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' }) : '—'} / 正确的 {labelFor(ch.answer.newTonic, { scheme, mode: 'major', prompt: 'new-tonic-degree' })}
         </p>
       )}
       {ch.phrases.map((ph, i) => (

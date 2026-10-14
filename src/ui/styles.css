@@ -39,6 +39,9 @@ button.big { width: 100%; min-height: 56px; font-size: 1.1rem; }
 .feedback.ok p { color: var(--ok); font-weight: 600; }
 .feedback.wrong p { color: var(--bad); }
 .scale-bar { display: flex; gap: 4px; margin: 8px 0; }
+.small { font-size: .85rem; opacity: .8 }
+.boss-result .scale-bar { flex-wrap: wrap }
+.boss-result .scale-cell { min-width: 3.2rem }
 .scale-cell { flex: 1; text-align: center; padding: 6px 0; border-radius: 6px; background: color-mix(in srgb, var(--fg) 6%, transparent); }
 .scale-cell[data-mark='chosen'] { background: var(--bad); color: #fff; }
 .scale-cell[data-mark='correct'] { background: var(--ok); color: #fff; }

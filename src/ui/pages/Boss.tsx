@@ -41,8 +41,15 @@ export function Boss(props: { onExit: () => void }) {
   useWakeLock(active)
 
   useEffect(() => {
-    void runtime.bossStatus().then((s) => setRemaining(s.remainingToday), () => {})
-    return () => audio.stopAll()
+    const refresh = () => { void runtime.bossStatus().then((s) => setRemaining(s.remainingToday), () => {}) }
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    refresh()
+    // 页面隔夜不关：回到前台时重新取今日剩余次数
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      audio.stopAll()
+    }
   }, [runtime, audio])
 
   const play = (plan: Parameters<typeof audio.play>[0]) => {
@@ -71,13 +78,13 @@ export function Boss(props: { onExit: () => void }) {
     if (!ch || inFlight.current) return
     inFlight.current = true
     setSubmitting(true)
+    setError(null)
     const grade = gradeBoss(ch, final)
     try {
       const r = await runtime.recordBossAttempt(ch, grade)
-      const s = await runtime.bossStatus()
-      setRemaining(s.remainingToday)
+      setRemaining(r.remainingToday)
       audio.stopAll()
-      setStep({ kind: 'result', grade, advancedTo: r.advancedTo, remaining: s.remainingToday })
+      setStep({ kind: 'result', grade, advancedTo: r.advancedTo, remaining: r.remainingToday })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -164,6 +171,7 @@ export function Boss(props: { onExit: () => void }) {
     return (
       <main className="page boss">
         <p className="prompt-text">新调的主音是原调的哪个音级？</p>
+        {fullReplay}
         {errorLine}
         <section className="answer-zone">
           <ChoiceControl
@@ -212,16 +220,18 @@ export function Boss(props: { onExit: () => void }) {
       <section className="answer-zone">
         {groups.map((g) =>
           done(g) ? (
-            <p key={g} className="small">已提交</p>
+            <p key={g} className="small">{PART_NAME[g]}：已提交</p>
           ) : (
+            <div key={`${i}:${g}`}>
+            <p className="small">{PART_NAME[g]}</p>
             <SequenceControl
-              key={`${i}:${g}`}
               length={g === 'melody' ? ph.melodyCount : bars}
               alphabet={g === 'melody' ? ch.alphabets.melody : g === 'chords' ? ch.alphabets.chords! : ch.alphabets.rhythm!}
               label={lab(g === 'melody' ? 'notate-melody' : g === 'chords' ? 'notate-chords' : 'notate-patterns')}
               enabled
               onSubmit={(ids) => setPart(g, ids)}
             />
+            </div>
           ),
         )}
         <button

@@ -34,7 +34,7 @@ function fakeRuntime(ch: BossChallenge, opts: { remaining?: number; next?: BossC
     subscribe: () => () => {},
     bossStatus: async () => ({ phaseId: ch.piece.phaseId, masteryReady: true, blockingKeys: 0, attemptsToday: 0, remainingToday: opts.remaining ?? 3 }),
     newBossChallenge: async () => queue.shift() ?? ch,
-    recordBossAttempt: vi.fn(async (_c: unknown, g: { passed: boolean }) => { recorded.push(g); return { advancedTo: g.passed ? 'P2' : null } }),
+    recordBossAttempt: vi.fn(async (_c: unknown, g: { passed: boolean }) => { recorded.push(g); return { advancedTo: g.passed ? 'P2' : null, remainingToday: Math.max(0, (opts.remaining ?? 3) - recorded.length) } }),
   }
   return { rt, recorded }
 }
@@ -109,7 +109,10 @@ describe('关卡页（P-5 spec §4.2）', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '播放整曲' })) })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '开始作答' })) })
     expect(document.querySelectorAll('.sequence')).toHaveLength(2)
+    expect(screen.getByText('旋律')).toBeTruthy()
+    expect(screen.getByText('和弦')).toBeTruthy()
     await fillSequence(ch, 'notate-melody', ch.answer.melody[0], 0)
+    expect(screen.getByText('旋律：已提交')).toBeTruthy()
     expect(screen.getByRole('button', { name: '下一句' })).toHaveProperty('disabled', true)
     await fillSequence(ch, 'notate-chords', ch.answer.chords!.slice(0, 2), 0)
     expect(screen.getByRole('button', { name: '下一句' })).toHaveProperty('disabled', false)
@@ -128,6 +131,16 @@ describe('关卡页（P-5 spec §4.2）', () => {
       await act(async () => { fireEvent.click(screen.getByRole('button', { name: '下一句' })) })
     }
     expect(screen.getByText(/新调的主音是原调的哪个音级/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /重听整曲（剩 3 次）/ })).toBeTruthy()
+  })
+
+  it('开始页回到前台时刷新今日剩余次数', async () => {
+    const ch = generateBoss(c, 'P1', 8)
+    const { rt } = mount(ch)
+    expect(await screen.findByText(/今天还能挑战 3 次/)).toBeTruthy()
+    rt.bossStatus = async () => ({ phaseId: ch.piece.phaseId, masteryReady: true, blockingKeys: 0, attemptsToday: 1, remainingToday: 2 })
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(await screen.findByText(/今天还能挑战 2 次/)).toBeTruthy()
   })
 
   it('中途离开不记录尝试', async () => {
