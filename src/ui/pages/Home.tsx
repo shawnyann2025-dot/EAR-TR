@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { MicError } from '../../audio/micCapture'
 import { buildCurriculum } from '../../curriculum/curriculum'
 import type { BossStatus } from '../../runtime/runtime'
+import { useNeedRefresh, useUpdatePort } from '../pwa'
 import { useRuntime, useSnapshot } from '../RuntimeContext'
 
 const curriculum = buildCurriculum()
@@ -10,6 +11,8 @@ type Status = 'notStarted' | 'inProgress' | 'mainDone'
 export function Home(props: { onOpenSettings: () => void; onOpenBoss: () => void }) {
   const { runtime, audio, mic, pushNotice } = useRuntime()
   const snap = useSnapshot()
+  const updates = useUpdatePort()
+  const needRefresh = useNeedRefresh()
   const [status, setStatus] = useState<Status | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [boss, setBoss] = useState<BossStatus | null>(null)
@@ -78,6 +81,9 @@ export function Home(props: { onOpenSettings: () => void; onOpenBoss: () => void
         <span>{phaseId} · {phaseLabel}</span>
         <button type="button" onClick={props.onOpenSettings}>设置</button>
       </header>
+      {needRefresh && (!snap.session || snap.session.phase === 'done') && (
+        <button type="button" className="banner update" onClick={() => void updates.apply()}>有新版本，点此更新</button>
+      )}
       {error && <p className="error">{error}</p>}
       {busy && <p>{busy}</p>}
       <div className="home-actions">

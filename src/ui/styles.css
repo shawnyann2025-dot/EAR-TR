@@ -24,6 +24,7 @@ button.big { width: 100%; min-height: 56px; font-size: 1.1rem; }
 .page.home, .page.summary, .page.settings, .page.onboarding, .page.storage-problem { padding-bottom: 24px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--muted); }
 .banner.warn { background: var(--warn-bg); padding: 8px 16px; font-size: 0.9rem; }
+.banner.update { width: 100%; background: var(--accent); color: #fff; border-color: transparent; }
 .error { color: var(--bad); }
 .good { color: var(--ok); font-weight: 600; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
