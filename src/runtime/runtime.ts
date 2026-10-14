@@ -70,7 +70,7 @@ export interface Runtime {
   updateProfile(patch: Partial<Omit<Profile, 'id' | 'schemaVersion'>>): Promise<Profile>
   bossStatus(): Promise<BossStatus>
   newBossChallenge(): Promise<BossChallenge>
-  recordBossAttempt(ch: BossChallenge, grade: BossGrade): Promise<{ advancedTo: PhaseId | null }>
+  recordBossAttempt(ch: BossChallenge, grade: BossGrade): Promise<{ advancedTo: PhaseId | null; remainingToday: number }>
   exportBundle(): Promise<string>
   /** 先校验（坏包抛 StorageImportError，不动任何数据），再自动备份、替换、重置缓存 */
   importBundle(json: string): Promise<void>
@@ -134,11 +134,17 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
 
   const today = (p: Profile) => dayIndex(p.createdAtLocalDate, deps.todayLocalDate())
 
+  async function attemptsOn(phaseId: PhaseId, day: number): Promise<number> {
+    return (await repo.listBossAttempts(phaseId)).filter((a) => a.day === day).length
+  }
+  /** 本运行实例已发出的挑战数：中途离开不记尝试，但再进必须是新片段（P-5 spec §4.4） */
+  let bossStarted = 0
+
   async function bossStatusNow(): Promise<BossStatus> {
     const p = await ensureProfileNow()
     const day = today(p)
     const gate = evaluateGate(curriculum, await repo.loadMastery(), p.phaseId, true)
-    const attemptsToday = (await repo.listBossAttempts(p.phaseId)).filter((a) => a.day === day).length
+    const attemptsToday = await attemptsOn(p.phaseId, day)
     return {
       phaseId: p.phaseId,
       masteryReady: gate.blockingKeys.length === 0,
@@ -290,16 +296,18 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         if (!s.masteryReady) throw new Error('掌握度还没达标，暂时不能挑战实战关')
         if (s.remainingToday <= 0) throw new Error('今天的挑战次数已用完，明天再来')
         const p = snapshot.profile!
-        return generateBoss(curriculum, s.phaseId, sessionSeed(p.id, today(p), 1000 + s.attemptsToday))
+        return generateBoss(curriculum, s.phaseId, sessionSeed(p.id, today(p), 1000 + s.attemptsToday * 100 + bossStarted++))
       }),
     recordBossAttempt: (ch: BossChallenge, grade: BossGrade) =>
       serial(async () => {
-        const s = await bossStatusNow()
-        if (s.remainingToday <= 0) throw new Error('今天的挑战次数已用完，明天再来')
-        const p = snapshot.profile!
+        const p = await ensureProfileNow()
         const day = today(p)
+        const phaseId = ch.piece.phaseId
+        const used = await attemptsOn(phaseId, day)
+        if (used >= BOSS_ATTEMPTS_PER_DAY) throw new Error('今天的挑战次数已用完，明天再来')
+        const alreadyPassed = (await repo.listBossAttempts(phaseId)).some((a) => a.passed)
         await write(() =>
-          repo.appendBossAttempt({ phaseId: ch.piece.phaseId, day, seed: ch.piece.seed, parts: { ...grade.parts } as Record<string, number>, passed: grade.passed, at: deps.nowIso() }),
+          repo.appendBossAttempt({ phaseId, day, seed: ch.piece.seed, parts: { ...grade.parts } as Record<string, number>, passed: grade.passed, at: deps.nowIso() }),
         )
         let advancedTo: PhaseId | null = null
         if (grade.passed && p.phaseId === ch.piece.phaseId) {
@@ -310,10 +318,11 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
             await write(() => repo.saveProfile(next))
             advancedTo = to
           }
-          await write(() => repo.putGate({ phaseId: ch.piece.phaseId, passedOnDay: day }))
+          if (!alreadyPassed) await write(() => repo.putGate({ phaseId, passedOnDay: day }))
         }
         notify()
-        return { advancedTo }
+        const remainingToday = Math.max(0, BOSS_ATTEMPTS_PER_DAY - (await attemptsOn(snapshot.profile!.phaseId, day)))
+        return { advancedTo, remainingToday }
       }),
     exportBundle: () => serial(async () => JSON.stringify(await repo.exportAll(deps.nowIso()))),
     importBundle: (json) => serial(async () => {

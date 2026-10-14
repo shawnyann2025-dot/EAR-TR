@@ -7,6 +7,7 @@ import type { Response } from '../exercises/types'
 import type { PlaybackPlan } from '../music/playback'
 import { masteryKey, MODALITIES } from '../curriculum/knowledgePoints'
 import { knowledgePointsOfPhase } from '../curriculum/curriculum'
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryState } from '../scheduling/mastery'
 import { initialMastery } from '../scheduling/mastery'
 import type { SessionRecord } from '../session/types'
@@ -466,7 +467,7 @@ describe('出题时搬入音域（P-4 spec §4.2）', () => {
   })
 })
 
-async function seedStrong(repo: MemoryRepository, phase: 'P1' | 'P2') {
+async function seedStrong(repo: MemoryRepository, phase: PhaseId) {
   for (const kp of knowledgePointsOfPhase(c, phase))
     for (const m of MODALITIES)
       await repo.putMastery(masteryKey(kp, m), { ...initialMastery(), stability: 40, contextLevel: 1, variationLevel: 1, window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: i, difficultyStep: 3 })), lastSeenDay: 19 })
@@ -490,7 +491,9 @@ describe('实战关（P-5 spec §4.1、§4.3）', () => {
     for (let i = 0; i < 3; i++) {
       const ch = await rt.newBossChallenge()
       const g = gradeBoss(ch, { melody: ch.answer.melody.map((p) => p.map(() => 'xx')) })
-      expect((await rt.recordBossAttempt(ch, g)).advancedTo).toBeNull()
+      const r = await rt.recordBossAttempt(ch, g)
+      expect(r.advancedTo).toBeNull()
+      expect(r.remainingToday).toBe(2 - i)
     }
     expect((await rt.bossStatus()).remainingToday).toBe(0)
     await expect(rt.newBossChallenge()).rejects.toThrow(/次数/)
@@ -536,5 +539,41 @@ describe('实战关（P-5 spec §4.1、§4.3）', () => {
     await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
     expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
     expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+  })
+
+  it('中途离开（不记录）再进：新片段，seed 不同', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const a = await rt.newBossChallenge()
+    const b = await rt.newBossChallenge()
+    expect(b.piece.seed).not.toBe(a.piece.seed)
+  })
+
+  it('每日次数按所记录挑战的阶段计', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    for (let i = 0; i < 3; i++) await repo.appendBossAttempt({ phaseId: 'P1', day: 0, seed: i, parts: {}, passed: false, at: 'x' })
+    await rt.updateProfile({ phaseId: 'P2' })
+    await expect(rt.recordBossAttempt(ch, gradeBoss(ch, { melody: [] }))).rejects.toThrow(/次数/)
+    expect(await repo.listBossAttempts('P1')).toHaveLength(3)
+  })
+
+  it('P5 重复通过只写一条关卡记录', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P5')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    await rt.updateProfile({ phaseId: 'P5' })
+    for (let i = 0; i < 2; i++) {
+      const ch = await rt.newBossChallenge()
+      const r = await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+      expect(r.advancedTo).toBeNull()
+    }
+    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P5', passedOnDay: 0 }])
   })
 })
