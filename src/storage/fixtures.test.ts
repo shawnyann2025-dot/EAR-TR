@@ -8,12 +8,12 @@ import { parseBundle } from './bundle'
 import { MemoryRepository } from './memory'
 
 const PHASES: PhaseId[] = ['P1', 'P2', 'P3', 'P4', 'P5']
-const file = (p: PhaseId) => `docs/fixtures/boss-ready-${p}.json`
+const file = (p: PhaseId) => `public/fixtures/boss-ready-${p}.json`
 
 if (process.env.UPDATE_FIXTURES === '1') {
   describe('真机验收夹具（重写）', () => {
-    it('写出 docs/fixtures/boss-ready-P1..P5.json', () => {
-      mkdirSync('docs/fixtures', { recursive: true })
+    it('写出 public/fixtures/boss-ready-P1..P5.json', () => {
+      mkdirSync('public/fixtures', { recursive: true })
       for (const p of PHASES) writeFileSync(file(p), JSON.stringify(bossReadyBundle(p), null, 2) + '\n')
     })
   })

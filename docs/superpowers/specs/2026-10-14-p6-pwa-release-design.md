@@ -83,7 +83,7 @@
 - 四条流程（每条一个 spec 文件，每个测试用全新的浏览器上下文，即全新的 IndexedDB）：
   1. **首次使用**（`first-run.spec.ts`）：打开 → 开屏引导走完 → 音域测试选「自己判断」→ 首页出现「开始今天的练习」。
   2. **一场练习**（`session.spec.ts`）：完成首次使用 → 开始今天的练习 → 对出现的题目任意作答 3 题（点第一个可用的答案按钮，打拍题跳过或点按）→ 提前结束 → 看到总结页 → 回首页。不判对错，只验证流程不卡死。
-  3. **导出导入与实战关**（`backup-boss.spec.ts`）：完成首次使用 → 设置 → 导出备份（捕获下载，内容能被 `JSON.parse` 且 `schemaVersion` 为 2）→ 导入 `docs/fixtures/boss-ready-P1.json` → 首页出现「挑战实战关」→ 开始 → 播放整曲 → 开始作答 → 拍号题与每句都提交任意答案 → 看到结果页与「换一段再试」。
+  3. **导出导入与实战关**（`backup-boss.spec.ts`）：完成首次使用 → 设置 → 导出备份（捕获下载，内容能被 `JSON.parse` 且 `schemaVersion` 为 2）→ 导入 `public/fixtures/boss-ready-P1.json` → 首页出现「挑战实战关」→ 开始 → 播放整曲 → 开始作答 → 拍号题与每句都提交任意答案 → 看到结果页与「换一段再试」。
   4. **离线**（`offline.spec.ts`）：完成首次使用 → 等 `navigator.serviceWorker.ready` 且页面被 Service Worker 控制 → `context.setOffline(true)` → 刷新 → 首页照常显示、阶段与先前一致。
 - 选择器优先用可见文字与 role（与组件测试一致），不加 `data-testid`，除非某个控件没有可读名称。
 - 唱歌部分不进端到端测试（WebKit 无法模拟麦克风）；音频播放在无头浏览器里照常执行，测试不断言声音。
@@ -92,7 +92,7 @@
 ## 6. 真机验收清单（`docs/superpowers/plans/2026-10-13-p3b-device-acceptance.md`）
 
 - 第 0 节改为：打开 HTTPS 网址 `https://shawnyann2025-dot.github.io/EAR-TR/`（部署哪个分支由开发者在交付时说明）；局域网 http 的做法降为「开发者本地调试」附注。删除「http 下可能不保持亮屏」一条。
-- 第 8 节（实战关）的测试数据导入，改为说明从网址下载 `docs/fixtures/` 里的文件：在仓库页面打开该文件 →「Download raw file」，或开发者在交付时附上直链。
+- 第 8 节（实战关）的测试数据导入，改为从部署站点下载 `public/fixtures/` 里的文件（`<网址>/fixtures/boss-ready-P1.json`），手机上也能直接取。
 - 新增第 9 节「安装与离线（P-6）」，iPhone 与安卓各做一遍：
   - [ ] 添加到主屏幕（iPhone：Safari 分享 →「添加到主屏幕」；安卓：Chrome 菜单 →「安装应用」），图标与名称「练耳」正确
   - [ ] 从主屏幕打开：全屏，没有浏览器地址栏
@@ -126,4 +126,10 @@
 
 ## 10. 状态
 
-已实现；e2e 待首次 CI 运行确认。偏差见 SDD 账本裁定。
+已实现。与 spec 的偏差：
+
+- Pages 部署并发组改为不取消进行中的部署（`cancel-in-progress: false`）。
+- e2e 的 tsconfig 用 `src/storage/fixtures.node.d.ts` 代替 `@types/node`。
+- 实战关测试数据移到 `public/fixtures/`，以便手机直接下载。
+- 本地 Windows Git Bash 构建带子路径需 `MSYS_NO_PATHCONV=1`。
+- e2e 待首次 CI 运行确认。

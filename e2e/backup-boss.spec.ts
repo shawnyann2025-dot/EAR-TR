@@ -10,7 +10,7 @@ test('导出备份 → 导入实战关测试数据 → 完成一关', async ({ p
   const file = await (await dl).path()
   expect(JSON.parse(readFileSync(file, 'utf8')).schemaVersion).toBe(2)
 
-  await page.locator('input[type=file]').setInputFiles('docs/fixtures/boss-ready-P1.json')
+  await page.locator('input[type=file]').setInputFiles('public/fixtures/boss-ready-P1.json')
   await expect(page.getByText('导入成功', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '返回', exact: true }).click()
 
