@@ -1,0 +1,2376 @@
+{
+  "schemaVersion": 2,
+  "exportedAt": "2026-09-01T00:00:00.000Z",
+  "profile": {
+    "id": "fixture",
+    "createdAtLocalDate": "2026-09-01",
+    "phaseId": "P2",
+    "displayScheme": "solfege",
+    "placement": {
+      "done": true,
+      "startPhase": "P2"
+    },
+    "schemaVersion": 2,
+    "vocalRange": null,
+    "singMode": "self"
+  },
+  "mastery": [
+    [
+      "degree:major:fa@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "degree:major:fa@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "degree:major:fa@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "degree:major:ti@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "degree:major:ti@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "degree:major:ti@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:vi@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:vi@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:vi@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:ii@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:ii@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "chord:ii@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:dotted@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:dotted@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:dotted@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:rest@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:rest@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:rest@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:sixteenth@recognize",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:sixteenth@sing",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ],
+    [
+      "rhythm:sixteenth@notate",
+      {
+        "stability": 40,
+        "difficulty": 0.3,
+        "variationLevel": 1,
+        "contextLevel": 1,
+        "window": [
+          {
+            "correct": true,
+            "day": 0,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 1,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 2,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 3,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 4,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 5,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 6,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 7,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 8,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 9,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 10,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 11,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 12,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 13,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 14,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 15,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 16,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 17,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 18,
+            "difficultyStep": 3
+          },
+          {
+            "correct": true,
+            "day": 19,
+            "difficultyStep": 3
+          }
+        ],
+        "lastSeenDay": 19
+      }
+    ]
+  ],
+  "attempts": [],
+  "attemptAggregates": [],
+  "sessions": [],
+  "gates": [],
+  "bossAttempts": []
+}

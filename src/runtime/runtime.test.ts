@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { gradeBoss } from '../boss/grade'
 import { buildCurriculum } from '../curriculum/curriculum'
-import { answerAsResponse } from '../exercises/generate'
+import { fitToRange, VOICE_PRESETS } from '../pitch/range'
+import { answerAsResponse, generate as generateEx } from '../exercises/generate'
 import type { Response } from '../exercises/types'
 import type { PlaybackPlan } from '../music/playback'
-import { masteryKey } from '../curriculum/knowledgePoints'
+import { masteryKey, MODALITIES } from '../curriculum/knowledgePoints'
 import { knowledgePointsOfPhase } from '../curriculum/curriculum'
-import { MODALITIES } from '../curriculum/knowledgePoints'
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryState } from '../scheduling/mastery'
 import { initialMastery } from '../scheduling/mastery'
 import type { SessionRecord } from '../session/types'
@@ -20,7 +22,7 @@ function fakes() {
   let stopped = 0
   const audio: AudioPort = {
     currentTime: 0,
-    play: (plan) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
+    play: (plan, _opts) => { played.push(plan); return { startSec: 0, endSec: plan.totalDurSec } },
     stopAll: () => { stopped++ },
   }
   const pending: (() => void)[] = []
@@ -117,8 +119,9 @@ describe('createRuntime', () => {
     const rt = createRuntime(d)
     await rt.startToday()
     const first = rt.getSnapshot().session!.current!.exercise
+    const stoppedBefore = d.stoppedCount()
     await rt.dispatch({ type: 'interrupted' })
-    expect(d.stoppedCount()).toBe(1)
+    expect(d.stoppedCount()).toBe(stoppedBefore + 1)
     expect(rt.getSnapshot().session?.phase).toBe('idle')
     await rt.dispatch({ type: 'start' })
     expect(rt.getSnapshot().session?.current?.exercise).toEqual(first)
@@ -261,7 +264,7 @@ describe('createRuntime', () => {
     expect(d.played).toHaveLength(1)
   })
 
-  it('升阶段：advancePhase 更新并保存 Profile、记关卡，下一场按 P2 出题', async () => {
+  it('掌握度达标也不升阶段：Profile 仍在 P1、不记关卡，下一场仍按 P1 出题', async () => {
     const repo = new MemoryRepository()
     const strong = (): MasteryState => ({
       ...initialMastery(),
@@ -281,11 +284,12 @@ describe('createRuntime', () => {
     const rt = createRuntime(deps(repo, '2026-10-13'))
     await rt.startToday()
     expect(rt.getSnapshot().session?.phase).toBe('done')
-    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
-    expect((await repo.loadProfile())?.phaseId).toBe('P2')
-    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P1', passedOnDay: 30 }])
+    expect(rt.getSnapshot().session?.summary?.gate).toMatchObject({ evaluated: true, masteryReady: true })
+    expect(rt.getSnapshot().profile?.phaseId).toBe('P1')
+    expect((await repo.loadProfile())?.phaseId).toBe('P1')
+    expect((await repo.exportAll('x')).gates).toEqual([])
     await rt.startExtra()
-    expect(rt.getSnapshot().session?.phaseId).toBe('P2')
+    expect(rt.getSnapshot().session?.phaseId).toBe('P1')
     expect(rt.getSnapshot().session?.sessionNo).toBe(1)
   })
 
@@ -319,28 +323,6 @@ describe('createRuntime', () => {
 })
 
 describe('Profile 与导入导出', () => {
-  const strongMastery = (): MasteryState => ({
-    ...initialMastery(),
-    stability: 20,
-    contextLevel: 1,
-    variationLevel: 1,
-    window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: 10 + i, difficultyStep: 3 })),
-    lastSeenDay: 29,
-  })
-  const profileOf = (phaseId: 'P1' | 'P2'): import('../storage/types').Profile => ({
-    id: 'p-test', createdAtLocalDate: '2026-09-13', phaseId, displayScheme: 'solfege', placement: { done: false, startPhase: null }, schemaVersion: 1,
-  })
-  /** 今天（第 30 天）的主线记录：无题可答、实战关 5/5，开场即结算并升阶段 */
-  const finishingRecord = (): SessionRecord => ({
-    day: 30, sessionNo: 0, phaseId: 'P1', plan: { day: 30, seed: 1, phaseId: 'P1', items: [] }, index: 0,
-    progress: { attempted: 0, correct: 0 }, boss: { attempted: 5, correct: 5 }, byTrack: { T: 0, H: 0, R: 0 }, reliefTriggered: false, completed: false,
-  })
-  async function seedStrongP1(repo: Repository, phaseId: 'P1' | 'P2') {
-    for (const kp of knowledgePointsOfPhase(c, 'P1')) for (const m of MODALITIES) await repo.putMastery(masteryKey(kp, m), strongMastery())
-    await repo.saveProfile(profileOf(phaseId))
-    await repo.putSession(finishingRecord())
-  }
-
   it('updateProfile：合并补丁、落盘、更新快照并通知', async () => {
     const repo = new MemoryRepository()
     const rt = createRuntime(deps(repo))
@@ -354,26 +336,6 @@ describe('Profile 与导入导出', () => {
     const q = await rt.updateProfile({ placement: { done: true, startPhase: 'P2' }, phaseId: 'P2' })
     expect(q).toMatchObject({ displayScheme: 'numeric', phaseId: 'P2', id: 'p-test' })
     expect(await repo.loadProfile()).toEqual(q)
-  })
-
-  it('updateProfile 之后升阶段不会把 displayScheme 写回旧值', async () => {
-    const repo = new MemoryRepository()
-    await seedStrongP1(repo, 'P1')
-    const rt = createRuntime(deps(repo))
-    await rt.updateProfile({ displayScheme: 'numeric' })
-    await rt.startToday()
-    expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
-    expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
-  })
-
-  it('已在目标阶段时重新结算：不重复保存 Profile，也不重复记关卡', async () => {
-    const repo = new MemoryRepository()
-    await seedStrongP1(repo, 'P2') // 模拟：升阶段已落盘，但会话记录没来得及标完成就被杀
-    const rt = createRuntime(deps(repo))
-    await rt.startToday()
-    expect(rt.getSnapshot().session?.phase).toBe('done')
-    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
-    expect((await repo.exportAll('x')).gates).toEqual([])
   })
 
   it('ensureProfile 建出 Profile 后通知订阅者', async () => {
@@ -431,5 +393,187 @@ describe('Profile 与导入导出', () => {
     expect(JSON.stringify(await repo.exportAll('x'))).toBe(before)
     expect(rt.getSnapshot().session).toBe(session)
     expect(rt.getSnapshot().lastBackup).toBeNull()
+  })
+})
+
+describe('播放前先停', () => {
+  it('每次 play 之前都调用 stopAll', async () => {
+    const d = deps(new MemoryRepository())
+    const order: string[] = []
+    const play = d.audio.play
+    const stop = d.audio.stopAll
+    d.audio.play = (plan, opts) => { order.push('play'); return play(plan, opts) }
+    d.audio.stopAll = () => { order.push('stop'); stop() }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    await playThrough(rt, d.flush, 3)
+    expect(order.filter((x) => x === 'play').length).toBeGreaterThanOrEqual(3)
+    order.forEach((x, i) => { if (x === 'play') expect(order[i - 1]).toBe('stop') })
+  })
+})
+
+describe('播放信息', () => {
+  it('play 时把 cutContextAtSec 交给音频，并在快照里给出 playback；中断后清空', async () => {
+    const d = deps(new MemoryRepository())
+    const optsSeen: unknown[] = []
+    const play = d.audio.play
+    d.audio.play = (plan, opts) => {
+      optsSeen.push(opts)
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    const s = rt.getSnapshot()
+    const csec = s.session!.current!.exercise.contentStartSec
+    expect(optsSeen.at(-1)).toEqual({ cutContextAtSec: csec })
+    expect(s.playback).toEqual({ startSec: 0, contentStartSec: csec })
+    await rt.dispatch({ type: 'interrupted' })
+    expect(rt.getSnapshot().playback).toBeNull()
+  })
+
+  it("audio.play 抛错时 playback 为 null，不残留上一道题的值，错误进 lastError", async () => {
+    const d = deps(new MemoryRepository())
+    const play = d.audio.play
+    let calls = 0
+    d.audio.play = (plan, opts) => {
+      if (++calls >= 2) throw new Error("boom")
+      return play(plan, opts)
+    }
+    const rt = createRuntime(d)
+    await rt.startToday()
+    expect(rt.getSnapshot().playback).not.toBeNull()
+    await d.flush()
+    const s = rt.getSnapshot().session!
+    await rt.dispatch({ type: "answer", response: answerAsResponse(s.current!.exercise.answer), latencyMs: 500 })
+    await rt.dispatch({ type: "next" })
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(rt.getSnapshot().playback).toBeNull()
+    expect(rt.getSnapshot().lastError).toContain("boom")
+  })
+})
+
+describe('出题时搬入音域（P-4 spec §4.2）', () => {
+  it('Profile 有音域时，唱题（热身）按 fitToRange 搬移', async () => {
+    const repo = new MemoryRepository()
+    const d = deps(repo)
+    const rt = createRuntime(d)
+    await rt.ensureProfile()
+    await rt.updateProfile({ vocalRange: { lowMidi: VOICE_PRESETS.bass.lowMidi, highMidi: VOICE_PRESETS.bass.highMidi } })
+    await rt.startToday()
+    const cur = rt.getSnapshot().session!.current!
+    expect(cur.exercise.format.kind).toBe('pitch')
+    const expected = fitToRange(generateEx(cur.spec, c), { lowMidi: 41, highMidi: 62 })
+    expect(cur.exercise).toEqual(expected)
+  })
+})
+
+async function seedStrong(repo: MemoryRepository, phase: PhaseId) {
+  for (const kp of knowledgePointsOfPhase(c, phase))
+    for (const m of MODALITIES)
+      await repo.putMastery(masteryKey(kp, m), { ...initialMastery(), stability: 40, contextLevel: 1, variationLevel: 1, window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: i, difficultyStep: 3 })), lastSeenDay: 19 })
+}
+
+describe('实战关（P-5 spec §4.1、§4.3）', () => {
+  it('掌握度未达标：bossStatus 不解锁，newBossChallenge 拒绝', async () => {
+    const rt = createRuntime(deps(new MemoryRepository()))
+    await rt.ensureProfile()
+    const s = await rt.bossStatus()
+    expect(s.masteryReady).toBe(false)
+    await expect(rt.newBossChallenge()).rejects.toThrow(/掌握度/)
+  })
+
+  it('达标后：出题、记录不通过的尝试；次数递减；第 4 次拒绝', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    expect((await rt.bossStatus()).masteryReady).toBe(true)
+    for (let i = 0; i < 3; i++) {
+      const ch = await rt.newBossChallenge()
+      const g = gradeBoss(ch, { melody: ch.answer.melody.map((p) => p.map(() => 'xx')) })
+      const r = await rt.recordBossAttempt(ch, g)
+      expect(r.advancedTo).toBeNull()
+      expect(r.remainingToday).toBe(2 - i)
+    }
+    expect((await rt.bossStatus()).remainingToday).toBe(0)
+    await expect(rt.newBossChallenge()).rejects.toThrow(/次数/)
+    expect(await repo.listBossAttempts('P1')).toHaveLength(3)
+  })
+
+  it('通过：升阶段、写关卡记录；每次出题的 seed 不同', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const a = await rt.newBossChallenge()
+    await rt.recordBossAttempt(a, gradeBoss(a, { melody: [] }))
+    const b = await rt.newBossChallenge()
+    expect(b.piece.seed).not.toBe(a.piece.seed)
+    const r = await rt.recordBossAttempt(b, gradeBoss(b, JSON.parse(JSON.stringify(b.answer))))
+    expect(r.advancedTo).toBe('P2')
+    expect((await repo.loadProfile())!.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P1', passedOnDay: 0 }])
+    expect(rt.getSnapshot().profile!.phaseId).toBe('P2')
+  })
+
+  it('挑战所属阶段已不是当前阶段：通过也不改 phaseId、不写关卡', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    await rt.updateProfile({ phaseId: 'P2' })
+    const r = await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+    expect(r.advancedTo).toBeNull()
+    expect((await repo.loadProfile())!.phaseId).toBe('P2')
+    expect((await repo.exportAll('x')).gates).toEqual([])
+  })
+
+  it('updateProfile 改了 displayScheme 之后通过：升阶段保留新的 displayScheme', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    await rt.updateProfile({ displayScheme: 'numeric' })
+    await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+    expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+    expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
+  })
+
+  it('中途离开（不记录）再进：新片段，seed 不同', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const a = await rt.newBossChallenge()
+    const b = await rt.newBossChallenge()
+    expect(b.piece.seed).not.toBe(a.piece.seed)
+  })
+
+  it('每日次数按所记录挑战的阶段计', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P1')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    const ch = await rt.newBossChallenge()
+    for (let i = 0; i < 3; i++) await repo.appendBossAttempt({ phaseId: 'P1', day: 0, seed: i, parts: {}, passed: false, at: 'x' })
+    await rt.updateProfile({ phaseId: 'P2' })
+    await expect(rt.recordBossAttempt(ch, gradeBoss(ch, { melody: [] }))).rejects.toThrow(/次数/)
+    expect(await repo.listBossAttempts('P1')).toHaveLength(3)
+  })
+
+  it('P5 重复通过只写一条关卡记录', async () => {
+    const repo = new MemoryRepository()
+    await seedStrong(repo, 'P5')
+    const rt = createRuntime(deps(repo))
+    await rt.ensureProfile()
+    await rt.updateProfile({ phaseId: 'P5' })
+    for (let i = 0; i < 2; i++) {
+      const ch = await rt.newBossChallenge()
+      const r = await rt.recordBossAttempt(ch, gradeBoss(ch, JSON.parse(JSON.stringify(ch.answer))))
+      expect(r.advancedTo).toBeNull()
+    }
+    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P5', passedOnDay: 0 }])
   })
 })

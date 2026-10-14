@@ -187,3 +187,40 @@ describe('FWD-1：已结束的节点不再累积', () => {
     expect(engine.activeCount).toBe(0)
   })
 })
+
+describe('P-3b：截尾、延迟、状态', () => {
+  it('play 带 cutContextAtSec 时，语境振荡器的 stop 时刻被截到 cut', () => {
+    const { ctx, created } = makeFakeContext()
+    const engine = new AudioEngine(ctx as unknown as AudioContext)
+    const p = notesToPlan([{ midi: 60, atSec: 0, durSec: 1.65 }], 'strings')
+    const { startSec, endSec } = engine.play(p, 0.1, { cutContextAtSec: 2.0 })
+    const stopArg = created.oscillators[0].stop.mock.calls[0][0] as number
+    expect(stopArg).toBeCloseTo(startSec + 2.0)
+    expect(endSec).toBeCloseTo(startSec + 2.0)
+  })
+
+  it('outputLatencySec：优先 outputLatency，其次 baseLatency，都没有为 0', () => {
+    const mk = (extra: object) => new AudioEngine({ currentTime: 0, state: 'running', ...extra } as unknown as AudioContext)
+    expect(mk({ outputLatency: 0.03, baseLatency: 0.01 }).outputLatencySec).toBe(0.03)
+    expect(mk({ outputLatency: 0, baseLatency: 0.01 }).outputLatencySec).toBe(0.01)
+    expect(mk({}).outputLatencySec).toBe(0)
+  })
+
+  it('onStateChange 订阅 statechange，返回的函数解除订阅', () => {
+    const listeners = new Set<() => void>()
+    const ctx = {
+      currentTime: 0,
+      state: 'running',
+      addEventListener: (_: string, h: () => void) => listeners.add(h),
+      removeEventListener: (_: string, h: () => void) => listeners.delete(h),
+    }
+    const engine = new AudioEngine(ctx as unknown as AudioContext)
+    const seen: string[] = []
+    const off = engine.onStateChange((s) => seen.push(s))
+    ctx.state = 'suspended'
+    for (const h of listeners) h()
+    expect(seen).toEqual(['suspended'])
+    off()
+    expect(listeners.size).toBe(0)
+  })
+})

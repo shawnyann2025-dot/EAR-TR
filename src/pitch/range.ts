@@ -1,10 +1,18 @@
 import type { Exercise, PitchTarget } from '../exercises/types'
-import type { PlaybackPlan } from '../music/playback'
+import { isPitched, type PlaybackPlan } from '../music/playback'
+import { freqToMidi } from '../music/pitch'
 
 export interface VocalRange {
   lowMidi: number
   highMidi: number
 }
+
+/** P-4b 裁定：搬移后计划里最低的事件不低于此（手机外放在 C2 以下几乎无声） */
+export const MIN_CONTEXT_MIDI = 36
+
+/** 最低的有音高事件（鼓不算）；没有则 Infinity */
+export const lowestMidi = (plans: PlaybackPlan[]) =>
+  Math.min(...plans.flatMap((p) => p.events.filter(isPitched).map((e) => freqToMidi(e.freqHz))))
 
 export type VoicePreset = 'bass' | 'tenor' | 'alto' | 'soprano'
 
@@ -38,7 +46,12 @@ const shiftTargets = (targets: readonly PitchTarget[], k: number, ratio: number)
  */
 export function fitToRange(exercise: Exercise, range: VocalRange | null): Exercise {
   if (!range || exercise.format.kind !== 'pitch' || exercise.answer.kind !== 'pitch') return exercise
-  const k = octaveShiftFor(exercise.answer.targets.map((t) => t.midi), range)
+  let k = octaveShiftFor(exercise.answer.targets.map((t) => t.midi), range)
+  const plans = [exercise.plan, exercise.feedback.replay, exercise.feedback.slow]
+  const low = lowestMidi(plans)
+  if (Number.isFinite(low)) {
+    while (k < 0 && low + 12 * k < MIN_CONTEXT_MIDI) k++
+  }
   if (k === 0) return exercise
   const ratio = Math.pow(2, k)
   return {

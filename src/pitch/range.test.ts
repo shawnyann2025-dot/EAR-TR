@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildCurriculum } from '../curriculum/curriculum'
 import { generate, type Exercise } from '../exercises/generate'
-import { VOICE_PRESETS, fitToRange, octaveShiftFor } from './range'
+import { freqToMidi } from '../music/pitch'
+import type { PlaybackPlan } from '../music/playback'
+import { MIN_CONTEXT_MIDI, lowestMidi, VOICE_PRESETS, fitToRange, octaveShiftFor } from './range'
 
 const c = buildCurriculum()
 const sing = (seed: number): Exercise =>
@@ -58,5 +60,46 @@ describe('fitToRange（P-4 spec D4）', () => {
       expect(mid).toBeGreaterThanOrEqual(range.lowMidi - 6)
       expect(mid).toBeLessThanOrEqual(range.highMidi + 6)
     }
+  })
+})
+
+describe('搬移下限（P-4b 裁定）', () => {
+  it('低音预设下，搬移后的计划里没有低于 MIDI 36 的事件（原本不低于 36 时）', () => {
+    for (const kp of ['degree:major:ti', 'degree:major:do', 'chord:I']) {
+      for (let cl = 0; cl <= 4; cl++) {
+        for (let seed = 0; seed < 4; seed++) {
+          let ex
+          try {
+            ex = generate({ kpId: kp, modality: 'sing', track: kp.startsWith('chord') ? 'H' : 'T', contextLevel: cl as never, variationLevel: 3, difficultyStep: 2, seed, segment: 'focus' }, c)
+          } catch {
+            continue
+          }
+          const lowest = (e: Exercise) =>
+            Math.min(...[e.plan, e.feedback.replay, e.feedback.slow].flatMap((p) => p.events.map((x) => freqToMidi(x.freqHz))))
+          const out = fitToRange(ex, VOICE_PRESETS.bass)
+          if (lowest(ex) >= MIN_CONTEXT_MIDI) expect(lowest(out)).toBeGreaterThanOrEqual(MIN_CONTEXT_MIDI - 1e-6)
+        }
+      }
+    }
+  })
+})
+
+describe('鼓事件不参与音域换算', () => {
+  const withDrums = (plan: PlaybackPlan): PlaybackPlan => ({
+    ...plan,
+    events: [{ atSec: 0, freqHz: 0, durSec: 0.1, timbreId: 'piano', gain: 1, drum: 'hat' }, ...plan.events],
+  })
+  it('lowestMidi 忽略鼓与零频率事件', () => {
+    const e = sing(3)
+    expect(lowestMidi([withDrums(e.plan)])).toBe(lowestMidi([e.plan]))
+    expect(Number.isFinite(lowestMidi([withDrums(e.plan)]))).toBe(true)
+  })
+  it('fitToRange 对含鼓的计划结果与不含鼓一致，鼓保持不动', () => {
+    const e = sing(3)
+    const range = VOICE_PRESETS.bass
+    const d: Exercise = { ...e, plan: withDrums(e.plan) }
+    const out = fitToRange(d, range)
+    expect(out.plan.events[0].freqHz).toBe(0)
+    expect(out.plan.events.slice(1).map((x) => x.freqHz)).toEqual(fitToRange(e, range).plan.events.map((x) => x.freqHz))
   })
 })

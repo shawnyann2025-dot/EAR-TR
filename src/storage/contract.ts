@@ -72,12 +72,29 @@ export function repositoryContract(
       expect(await b.exportAll('2026-10-13T00:00:00.000Z')).toEqual(bundle)
     })
 
+    it('实战关尝试：追加、按阶段过滤、按写入顺序；导出导入往返', async () => {
+      const r = await make({})
+      const a = (phaseId: 'P1' | 'P2', day: number, passed: boolean) => ({ phaseId, day, seed: day * 10, parts: { melody: 0.95 }, passed, at: `2026-10-14T00:00:0${day}.000Z` })
+      await r.appendBossAttempt(a('P1', 1, false))
+      await r.appendBossAttempt(a('P1', 2, true))
+      await r.appendBossAttempt(a('P2', 3, false))
+      expect((await r.listBossAttempts()).map((x) => x.day)).toEqual([1, 2, 3])
+      expect((await r.listBossAttempts('P1')).map((x) => x.day)).toEqual([1, 2])
+      const bundle = await r.exportAll('x')
+      expect(bundle.bossAttempts).toHaveLength(3)
+      const b = await make({})
+      await b.importAll(bundle)
+      expect(await b.listBossAttempts()).toEqual(await r.listBossAttempts())
+    })
+
     it('导入整体替换旧数据', async () => {
       const a = await make({})
+      await a.appendBossAttempt({ phaseId: 'P1', day: 1, seed: 1, parts: { melody: 1 }, passed: true, at: 'x' })
       await a.putMastery(masteryKey('degree:major:re', 'notate'), initialMastery())
       const empty = await (await make({})).exportAll('x')
       await a.importAll(empty)
       expect((await a.loadMastery()).size).toBe(0)
+      expect(await a.listBossAttempts()).toEqual([])
     })
 
     it('latestSessionNo 与导出顺序按数值而非字符串（含跨日前缀）', async () => {

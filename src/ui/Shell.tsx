@@ -1,0 +1,55 @@
+import { useEffect, useState } from 'react'
+import type { SessionState } from '../session/types'
+import { Boss } from './pages/Boss'
+import { Home } from './pages/Home'
+import { Onboarding } from './pages/Onboarding'
+import { RangeTest } from './pages/RangeTest'
+import { Practice } from './pages/Practice'
+import { Settings } from './pages/Settings'
+import { Summary } from './pages/Summary'
+import { useRuntime, useSnapshot } from './RuntimeContext'
+
+export function Shell(props: { storageWarning: string | null }) {
+  const { runtime, mic, notices, dismissNotice } = useRuntime()
+  const snap = useSnapshot()
+  const [settings, setSettings] = useState(false)
+  const [boss, setBoss] = useState(false)
+  const [dismissed, setDismissed] = useState<SessionState | null>(null)
+
+  const [bootError, setBootError] = useState<string | null>(null)
+
+  useEffect(() => {
+    runtime.ensureProfile().catch((e) => setBootError(e instanceof Error ? e.message : String(e)))
+  }, [runtime])
+
+  // 离开页面时释放麦克风（回来后按需重开）
+  useEffect(() => {
+    const onHide = () => mic.close()
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [mic])
+
+  const s = snap.session
+  let page
+  if (!snap.profile) page = bootError ? <main className="page"><p className="error">启动失败：{bootError}</p></main> : <main className="page">加载中…</main>
+  else if (!snap.profile.placement.done) page = <Onboarding />
+  else if (snap.profile.vocalRange === undefined) page = <RangeTest />
+  else if (settings) page = <Settings onBack={() => setSettings(false)} />
+  else if (boss) page = <Boss onExit={() => setBoss(false)} />
+  else if (s && s.phase !== 'done') page = <Practice />
+  else if (s && s.phase === 'done' && dismissed !== s) page = <Summary onHome={() => setDismissed(s)} />
+  else page = <Home onOpenSettings={() => setSettings(true)} onOpenBoss={() => setBoss(true)} />
+
+  return (
+    <>
+      {props.storageWarning && <div className="banner warn">{props.storageWarning}</div>}
+      {snap.storageError && <div className="banner warn">{snap.storageError}</div>}
+      {notices.map((n, i) => (
+        <div className="banner warn" key={n}>
+          {n} <button type="button" onClick={() => dismissNotice(i)}>知道了</button>
+        </div>
+      ))}
+      {page}
+    </>
+  )
+}

@@ -11,6 +11,7 @@ const valid = (): ExportBundle => ({
   attemptAggregates: [],
   sessions: [],
   gates: [],
+  bossAttempts: [],
 })
 
 describe('parseBundle', () => {
@@ -89,5 +90,37 @@ describe('parseBundle', () => {
     expect(bad({ gates: [{ phaseId: 'P1' }] })).toThrow(StorageImportError)
     expect(bad({ attemptAggregates: ['x'] })).toThrow(StorageImportError)
     expect(bad({ attemptAggregates: [{ key: 'k', attempts: 1 }] })).toThrow(StorageImportError)
+  })
+})
+
+describe('parseBundle：P-4 的可选 Profile 字段', () => {
+  it('接受 vocalRange / singMode / micFallbackReason；缺省也接受', () => {
+    const b = valid()
+    const withFields = { ...b, profile: { ...b.profile!, vocalRange: { lowMidi: 45, highMidi: 64 }, singMode: 'self', micFallbackReason: 'denied' } }
+    expect(parseBundle(JSON.stringify(withFields)).profile).toMatchObject({ singMode: 'self' })
+    expect(parseBundle(JSON.stringify({ ...b, profile: { ...b.profile!, vocalRange: null } })).profile!.vocalRange).toBeNull()
+  })
+  it('非法值拒绝', () => {
+    const b = valid()
+    expect(() => parseBundle(JSON.stringify({ ...b, profile: { ...b.profile!, singMode: 'loud' } }))).toThrow()
+    expect(() => parseBundle(JSON.stringify({ ...b, profile: { ...b.profile!, vocalRange: { lowMidi: 'a' } } }))).toThrow()
+    expect(() => parseBundle(JSON.stringify({ ...b, profile: { ...b.profile!, micFallbackReason: 'x' } }))).toThrow()
+  })
+})
+
+describe('parseBundle：v2 的 bossAttempts', () => {
+  it('v1 导出包导入时迁移出空的 bossAttempts，版本升到 2', () => {
+    const v1 = { ...valid(), schemaVersion: 1 } as Record<string, unknown>
+    delete v1.bossAttempts
+    const out = parseBundle(JSON.stringify(v1))
+    expect(out.schemaVersion).toBe(2)
+    expect(out.bossAttempts).toEqual([])
+  })
+  it('v2 包缺 bossAttempts 或条目结构不对：拒绝', () => {
+    const b = valid() as unknown as Record<string, unknown>
+    delete b.bossAttempts
+    expect(() => parseBundle(JSON.stringify(b))).toThrow()
+    expect(() => parseBundle(JSON.stringify({ ...valid(), bossAttempts: [{ phaseId: 'P1' }] }))).toThrow()
+    expect(() => parseBundle(JSON.stringify({ ...valid(), bossAttempts: [{ phaseId: 'P1', day: 1, seed: 1, parts: { melody: 'x' }, passed: true, at: 'x' }] }))).toThrow()
   })
 })

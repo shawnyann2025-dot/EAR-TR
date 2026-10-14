@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
 import { repositoryContract } from './contract'
-import { openIndexedDbRepository } from './indexeddb'
+import { deleteIndexedDb, openIndexedDbRepository } from './indexeddb'
 import { masteryKey } from '../curriculum/knowledgePoints'
 import { initialMastery } from '../scheduling/mastery'
 import { SCHEMA_VERSION, StorageCorruptError, StorageUnavailableError } from './types'
@@ -96,5 +96,41 @@ describe('IndexedDB：持久化与损坏', () => {
 
   it('没有 IndexedDB（globalThis.indexedDB 为空）：StorageUnavailableError', async () => {
     await expect(openIndexedDbRepository({ name: 'x' })).rejects.toBeInstanceOf(StorageUnavailableError)
+  })
+})
+
+describe('deleteIndexedDb', () => {
+  it('删库后重新打开是空库', async () => {
+    const env = fresh()
+    const a = await openIndexedDbRepository(env)
+    await a.saveProfile({ id: 'p', createdAtLocalDate: '2026-10-13', phaseId: 'P1', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: SCHEMA_VERSION })
+    await deleteIndexedDb(env)
+    const b = await openIndexedDbRepository(env)
+    expect(await b.loadProfile()).toBeNull()
+  })
+})
+
+describe('IndexedDB v1 → v2 迁移', () => {
+  it('旧库（v1，无 bossAttempts 仓库）打开后数据不变、可写尝试', async () => {
+    const env = fresh()
+    await new Promise<void>((resolve, reject) => {
+      const r = env.factory.open(env.name, 1)
+      r.onupgradeneeded = () => {
+        const db = r.result
+        db.createObjectStore('profile')
+        db.createObjectStore('mastery')
+        db.createObjectStore('attempts', { autoIncrement: true })
+        db.createObjectStore('attemptAggregates', { keyPath: 'key' })
+        db.createObjectStore('sessions')
+        db.createObjectStore('gates', { autoIncrement: true })
+        r.transaction!.objectStore('profile').put({ id: 'old', createdAtLocalDate: '2026-10-01', phaseId: 'P2', displayScheme: 'solfege', placement: { done: true, startPhase: 'P1' }, schemaVersion: 1 }, 'profile')
+      }
+      r.onsuccess = () => { r.result.close(); resolve() }
+      r.onerror = () => reject(r.error)
+    })
+    const repo = await openIndexedDbRepository(env)
+    expect((await repo.loadProfile())?.id).toBe('old')
+    await repo.appendBossAttempt({ phaseId: 'P2', day: 5, seed: 1, parts: { melody: 1 }, passed: true, at: 'x' })
+    expect(await repo.listBossAttempts()).toHaveLength(1)
   })
 })

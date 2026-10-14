@@ -9,8 +9,6 @@ import type { LadderState } from '../scheduling/ladder'
 import type { MasteryState, MasteryStore } from '../scheduling/mastery'
 import type { SessionPlan } from '../scheduling/scheduler'
 
-/** 实战关替身：本场实战关段正确率达标即视为通过（P-3 spec D3） */
-export const BOSS_STANDIN_ACCURACY = 0.8
 export const SESSION_MINUTES = 25
 
 export type SessionMode = 'session' | 'drill'
@@ -39,11 +37,11 @@ export interface SessionSummary {
   byTrack: Record<Track, number>
   reliefTriggered: boolean
   gate: {
+    /** 计划用完才评估；endEarly 不评估 */
     evaluated: boolean
-    passed: boolean
+    /** 本阶段三模态掌握度全部达标（阻塞项为 0）——达标后首页解锁实战关（P-5 spec §4.1） */
+    masteryReady: boolean
     blockingKeys: number
-    bossSatisfied: boolean
-    advancedTo: PhaseId | null
   }
 }
 
@@ -103,12 +101,11 @@ export type SessionEvent =
   | { type: 'endEarly' }
 
 export type SessionEffect =
-  | { type: 'play'; plan: PlaybackPlan }
+  | { type: 'play'; plan: PlaybackPlan; contentStartSec: number }
   | { type: 'stopAudio' }
   | { type: 'saveAttempt'; attempt: AttemptRecord }
   | { type: 'saveMastery'; key: MasteryKey; state: MasteryState }
   | { type: 'saveSession'; record: SessionRecord }
-  | { type: 'advancePhase'; from: PhaseId; to: PhaseId; day: number }
   | { type: 'itemError'; spec: ExerciseSpec; message: string }
   | { type: 'ended'; summary: SessionSummary }
 
@@ -118,6 +115,8 @@ export interface ReduceContext {
   mastery: MasteryStore
   /** 作答记录的时间戳，由壳层传入 */
   nowIso: string
+  /** P-4b：出题后变换题目（壳层用它把唱题搬进学习者音域）。纯函数 */
+  transformExercise?: (ex: Exercise) => Exercise
 }
 
 export interface ReduceResult {

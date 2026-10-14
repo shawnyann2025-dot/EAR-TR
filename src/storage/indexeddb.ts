@@ -1,3 +1,4 @@
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { MasteryState } from '../scheduling/mastery'
 import type { AttemptRecord, SessionRecord } from '../session/types'
@@ -8,6 +9,7 @@ import {
   StorageCorruptError,
   StorageUnavailableError,
   type AttemptAggregate,
+  type BossAttempt,
   type ExportBundle,
   type GateRecord,
   type Profile,
@@ -15,7 +17,7 @@ import {
 } from './types'
 
 export const DB_NAME = 'ear-tr'
-export const STORES = ['profile', 'mastery', 'attempts', 'attemptAggregates', 'sessions', 'gates'] as const
+export const STORES = ['profile', 'mastery', 'attempts', 'attemptAggregates', 'sessions', 'gates', 'bossAttempts'] as const
 type StoreName = (typeof STORES)[number]
 
 const PROFILE_KEY = 'profile'
@@ -36,7 +38,7 @@ function done(tx: IDBTransaction): Promise<void> {
   })
 }
 
-/** 迁移：按版本串联（P-3 spec §4.3）。v1 = 建全部对象仓库 */
+/** 迁移：按版本串联（P-3 spec §4.3）。v1 = 建全部对象仓库；v2 = 加 bossAttempts（P-5b） */
 function upgrade(db: IDBDatabase, oldVersion: number): void {
   if (oldVersion < 1) {
     db.createObjectStore('profile')
@@ -46,6 +48,7 @@ function upgrade(db: IDBDatabase, oldVersion: number): void {
     db.createObjectStore('sessions')
     db.createObjectStore('gates', { autoIncrement: true })
   }
+  if (oldVersion < 2) db.createObjectStore('bossAttempts', { autoIncrement: true })
 }
 
 function open(factory: IDBFactory, name: string, version: number | undefined): Promise<IDBDatabase> {
@@ -184,10 +187,19 @@ class IndexedDbRepository implements Repository {
     tx.objectStore('gates').add(g)
     await done(tx)
   }
+  async appendBossAttempt(a: BossAttempt) {
+    const tx = this.tx('bossAttempts', 'readwrite')
+    tx.objectStore('bossAttempts').add(a)
+    await done(tx)
+  }
+  async listBossAttempts(phaseId?: PhaseId) {
+    const all = (await req(this.tx('bossAttempts', 'readonly').objectStore('bossAttempts').getAll())) as BossAttempt[]
+    return all.filter((a) => phaseId === undefined || a.phaseId === phaseId)
+  }
   async exportAll(exportedAt: string): Promise<ExportBundle> {
     const tx = this.tx([...STORES], 'readonly')
     const masteryStore = tx.objectStore('mastery')
-    const [profile, mKeys, mValues, attempts, attemptAggregates, sessions, gates] = await Promise.all([
+    const [profile, mKeys, mValues, attempts, attemptAggregates, sessions, gates, bossAttempts] = await Promise.all([
       req(tx.objectStore('profile').get(PROFILE_KEY)),
       req(masteryStore.getAllKeys()),
       req(masteryStore.getAll()),
@@ -195,6 +207,7 @@ class IndexedDbRepository implements Repository {
       req(tx.objectStore('attemptAggregates').getAll()),
       req(tx.objectStore('sessions').getAll()),
       req(tx.objectStore('gates').getAll()),
+      req(tx.objectStore('bossAttempts').getAll()),
     ])
     const mastery = mKeys.map((k, i) => [k as MasteryKey, mValues[i] as MasteryState] as [MasteryKey, MasteryState])
     return {
@@ -206,6 +219,7 @@ class IndexedDbRepository implements Repository {
       attemptAggregates: (attemptAggregates as AttemptAggregate[]).sort((a, b) => byKey(a.key, b.key)),
       sessions: (sessions as SessionRecord[]).sort((a, b) => a.day - b.day || a.sessionNo - b.sessionNo),
       gates: gates as GateRecord[],
+      bossAttempts: bossAttempts as BossAttempt[],
     }
   }
   importAll(bundle: ExportBundle): Promise<void> {
@@ -228,6 +242,7 @@ class IndexedDbRepository implements Repository {
       for (const g of bundle.attemptAggregates) tx.objectStore('attemptAggregates').put(g)
       for (const s of bundle.sessions) tx.objectStore('sessions').put(s, sessionKey(s.day, s.sessionNo))
       for (const g of bundle.gates) tx.objectStore('gates').add(g)
+      for (const a of bundle.bossAttempts ?? []) tx.objectStore('bossAttempts').add(a)
     } catch (e) {
       // 同步写入失败（如 DataCloneError）：中止事务，回滚已排队的 clear
       try {
@@ -286,4 +301,20 @@ export async function openIndexedDbRepository(
     throw new StorageCorruptError('本地数据库里的 Profile 结构不对', await rawDump(factory, name))
   }
   return repo
+}
+
+/** 删除整个数据库（损坏后用户确认重建时用）。其他标签页占用时 reject */
+export function deleteIndexedDb(opts: { name?: string; factory?: IDBFactory } = {}): Promise<void> {
+  const factory = opts.factory ?? globalThis.indexedDB
+  const name = opts.name ?? DB_NAME
+  return new Promise((resolve, reject) => {
+    if (!factory) {
+      resolve()
+      return
+    }
+    const r = factory.deleteDatabase(name)
+    r.onsuccess = () => resolve()
+    r.onerror = () => reject(r.error)
+    r.onblocked = () => reject(new Error('另一个标签页正在使用本地数据库，请关闭其他标签页后重试'))
+  })
 }

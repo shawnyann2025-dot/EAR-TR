@@ -1,14 +1,11 @@
-import {
-  buildCurriculum,
-  knowledgePointsOfPhase,
-  type Curriculum,
-} from '../curriculum/curriculum'
-import {
-  MODALITIES,
-  masteryKey,
-  type MasteryKey,
-} from '../curriculum/knowledgePoints'
+import { simulateBossAttempt } from '../boss/answerability'
+import { generateBoss } from '../boss/generate'
+import { gradeBoss } from '../boss/grade'
+import { BOSS_ATTEMPTS_PER_DAY } from '../boss/types'
+import { buildCurriculum } from '../curriculum/curriculum'
+import { masteryKey, type MasteryKey } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
+import { makeRng } from '../music/rng'
 import { evaluateGate, nextPhase } from '../scheduling/gate'
 import type { SessionProgress } from '../scheduling/guardrails'
 import {
@@ -20,18 +17,7 @@ import type { MasteryState } from '../scheduling/mastery'
 import type { ExerciseSpec } from '../scheduling/exerciseSpec'
 import { buildSessionPlan, checkInterleaving } from '../scheduling/scheduler'
 import { prepareItem, recordAnswer, stagnationUpdates } from '../session/item'
-import {
-  makeVirtualLearner,
-  type LearnerParams,
-  type VirtualLearner,
-} from './virtualLearner'
-
-/**
- * 实战关在仿真里的替身：该阶段全部 key 的平均能力过阈值即视为通过。
- * 真正的实战关（多轨合成的模拟音乐片段）在 P-5 实现——这里只是让
- * 仿真能推进阶段，不是实战关的实现。
- */
-export const BOSS_ABILITY_THRESHOLD = 0.62
+import { makeVirtualLearner, type LearnerParams } from './virtualLearner'
 
 export interface DayRecord {
   day: number
@@ -89,24 +75,6 @@ export interface SimulationResult {
    * 该放行的信号，不是异常。把这部分计入会系统性地高估收敛点。
    */
   ladderAccuracy: number
-}
-
-function bossPasses(
-  curriculum: Curriculum,
-  learner: VirtualLearner,
-  phaseId: PhaseId,
-): boolean {
-  const kps = knowledgePointsOfPhase(curriculum, phaseId)
-  if (kps.length === 0) return true
-  let sum = 0
-  let n = 0
-  for (const kpId of kps) {
-    for (const m of MODALITIES) {
-      sum += learner.abilityOf(masteryKey(kpId, m))
-      n++
-    }
-  }
-  return n > 0 && sum / n >= BOSS_ABILITY_THRESHOLD
 }
 
 export function runSimulation(params: SimulationParams): SimulationResult {
@@ -206,17 +174,21 @@ export function runSimulation(params: SimulationParams): SimulationResult {
       decomposedKeys,
     })
 
-    // 关卡判定：三模态齐平 + 实战关（spec §8.3）
-    const gate = evaluateGate(
-      curriculum,
-      store,
-      phaseId,
-      bossPasses(curriculum, learner, phaseId),
-    )
-    if (gate.passed && phaseCompletionDay[phaseId] === undefined) {
-      phaseCompletionDay[phaseId] = day
-      const next = nextPhase(phaseId)
-      if (next) phaseId = next
+    // 关卡判定（P-5 spec §3.5）：掌握度达标后，当天最多 BOSS_ATTEMPTS_PER_DAY 次真实关卡
+    const mastery = evaluateGate(curriculum, store, phaseId, true)
+    if (mastery.blockingKeys.length === 0 && phaseCompletionDay[phaseId] === undefined) {
+      let passed = false
+      for (let attempt = 0; attempt < BOSS_ATTEMPTS_PER_DAY && !passed; attempt++) {
+        const bossSeed = (Math.imul(params.seed ^ 0x5bd1e995, 31) + day * 7 + attempt) >>> 0
+        const challenge = generateBoss(curriculum, phaseId, bossSeed)
+        const response = simulateBossAttempt(challenge, learner, makeRng(bossSeed ^ 0x9e3779b9))
+        passed = gradeBoss(challenge, response).passed
+      }
+      if (passed) {
+        phaseCompletionDay[phaseId] = day
+        const next = nextPhase(phaseId)
+        if (next) phaseId = next
+      }
     }
   }
 

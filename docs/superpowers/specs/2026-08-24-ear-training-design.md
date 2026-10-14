@@ -3,6 +3,7 @@
 - 日期：2026-08-24
 - 状态：已评审通过，待转实现计划
 - 目标平台：移动端优先的 PWA（纯前端、可离线、本地存储）
+- **状态（P-6）**：已实现离线 PWA（vite-plugin-pwa，首页提示更新）、GitHub Pages 部署与 Playwright 手机视口 e2e；见 docs/superpowers/specs/2026-10-14-p6-pwa-release-design.md 与 docs/deploy.md。
 
 ---
 
@@ -463,6 +464,11 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 
 **无逃生口。** 已确认：不提供"卡满 N 周强制解锁"。关卡的意义在于它不可绕过。
 
+**状态（P-5a）**：实战关为真实的多轨合成片段（`src/boss/`），每个作答部分 ≥ 90% 才算通过（和弦、节奏这类不超过 10 个位置的部分允许错 1 个，用户裁定 2026-10-14）；每天最多 3 次，每次换新片段。P-5b 接入界面之前，应用里的关卡仍由 P-3 的替身判定。
+
+**状态（P-5b）**：实战关在首页单独挑战（掌握度达标后解锁），通过即升阶段并写 `GateRecord`；日常会话不再评估关卡、不再升阶段。P-3 的实战关替身已删除。
+
+
 ### 8.4 实战关音源
 
 全部用 Web Audio 多轨合成自制（贝斯 + 和弦 + 旋律 + 简易鼓）。
@@ -520,11 +526,12 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 ### 10.1 实体
 
 ```ts
-Profile       { id, createdAtLocalDate, phaseId, displayScheme, placement, schemaVersion }
+Profile       { id, createdAtLocalDate, phaseId, displayScheme, placement, schemaVersion, vocalRange?, singMode?, micFallbackReason? }
 MasteryState  （按 MasteryKey 存，结构见 §7.1）
 Attempt       { at, day, sessionNo, kpId, modality, spec, correct, latencyMs, detail }
 SessionRecord { day, sessionNo, phaseId, plan, index, progress, boss, byTrack, reliefTriggered, completed }
 GateRecord    { phaseId, passedOnDay }
+BossAttempt   { phaseId, day, seed, parts, passed, at }   // P-5b；SCHEMA_VERSION = 2
 AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚合
 ```
 
@@ -567,6 +574,7 @@ AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚�
 |---|---|
 | 麦克风权限拒绝 | 唱模态转**自评模式**：播目标 → 用户唱 → 自行点选"唱对了 / 没唱对"。判定不可信，但 audiation 训练价值保留 |
 | AudioWorklet 不支持 | 同上 |
+| 题中收音出错 | 本题改为自评控件，下一题重试检测（P-4b） |
 | IndexedDB 不可用（隐私模式） | 内存存储 + 顶部常驻警告"本次进度不会保存" |
 | AudioContext 创建失败 | 明确提示浏览器不支持，不静默失败 |
 | 数据 schema 损坏 | 导出损坏副本 → 重建 → 提示用户 |
@@ -598,6 +606,11 @@ AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚�
 - 分别用"学得快"与"学得慢"的模拟学习者，课程周期落在合理区间
 
 **此测试可在编写任何 UI 之前验证整套课程与调度逻辑是否成立**，也是"课程即数据"设计的最大回报。
+
+**状态（P-5a）**：仿真的实战关改为「真实关卡可答性」：掌握度达标后每天最多 3 次，虚拟学习者对每个作答位置按对应知识点的听写能力逐位作答（`src/boss/answerability.ts`），再用 `gradeBoss` 判定。`BOSS_ABILITY_THRESHOLD` 已删除。
+
+实测（P-5a）：在 BOSS_SPEC_LEVEL (1,1,1) 下真实关卡对仿真节奏无影响——过关日完全由掌握度门槛决定；普通学习者 seed 4242 的 P1 完成于第 64 天（四个 seed 为 42–64 天），已超出 §8.2 的 4–6 周，属 P-5a 之前既有的偏差。用户裁定（2026-10-14）：先合入仿真改动，节奏另议。
+
 
 ---
 
@@ -636,6 +649,8 @@ AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚�
 **决定**：底层枚举保持 12 音类 12 名不变（作为掌握度模型的稳定 key），**语境相关拼写归为显示层问题**，在 UI 实现时由 `DisplayScheme` 依据当前调式与旋律方向决定显示字符串。底层 `ScaleDegree` 值不受影响。
 
 此项在 T6（和声/旋律小调）进入课程前必须解决，否则该阶段的显示是错的。
+
+**状态（P-3b）**：显示层 `src/ui/labels.ts` 在小调中把 `le` 显示为 `si`（数字 `♯5`、级数 `♯^5`）；底层音级 id 不变。
 
 ---
 
@@ -681,6 +696,7 @@ P-1（音乐内核与音频引擎）已实施完毕并通过全分支终审。�
 **FWD-5 · `GAP_SEC` 与 `releaseSec` 跨层不协调（影响 P-3）**
 `tonalContext.ts` 的 `GAP_SEC = 0.35` 在 music 层选定，而释音尾巴 `releaseSec` 定义在 audio 层——按 §3.2 的分层契约，music 层不可能知道它。实测后果：`strings` 音色（`releaseSec = 0.45`）下，L0 终止式末尾主和弦的 `stopSec` = 2.10，而目标音在 `leadInSec` = 2.0 起音，**尾音溢入目标音 0.10 秒**。其余三种音色不溢出。
 **修法**：不要回头调 `GAP_SEC`——那会让 music 层隐性耦合 audio 常量，破坏 §3.2 的边界。P-3 若发现语境撤除不干净，正解是在 audio 层做「目标音起音前淡出残留声部」。
+**状态（P-3b，已关闭）**：`AudioEngine.play` 的 `cutContextAtSec`（= `contentStartSec`）把本该在目标音前结束的语境声部的释音截到目标音起点；跨过该点的持续低音不受影响。music 层的 `GAP_SEC` 未动。
 
 **FWD-6 · `beatUnit` 的记谱约定靠测试而非类型钉住（影响 P-2 的 R6）**
 `bpm` 的语义是「每分钟多少个 `beatUnit` 拍」，算式自洽全靠一条约定：`beatsPerBar` 必须填**记谱拍数**而非**感知拍数**。6/8 拍应填 `{ beatsPerBar: 6, beatUnit: 8 }`（六个八分音符），而非 `{ beatsPerBar: 3, beatUnit: 8 }`（指挥数的三个附点四分音符）。填错会让时值计算静默出错。

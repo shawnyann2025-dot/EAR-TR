@@ -6,13 +6,21 @@ import { midiToFreq } from './pitch'
  */
 export type TimbreId = 'piano' | 'strings' | 'voice' | 'electronic'
 
+/** 鼓（P-5）：不进音色变异轴；有 drum 的事件忽略 freqHz 与 timbreId */
+export type DrumId = 'kick' | 'snare' | 'hat'
+
 export interface PlaybackEvent {
   atSec: number
   freqHz: number
   durSec: number
   timbreId: TimbreId
   gain: number
+  /** 鼓事件（P-5）；有它时 freqHz 与 timbreId 无意义 */
+  drum?: DrumId
 }
+
+/** 是否为有音高的事件（非鼓、频率为正）；折叠、搬移、取最低音等按频率换算 MIDI 的代码都须先过这一关 */
+export const isPitched = (e: PlaybackEvent): boolean => !e.drum && e.freqHz > 0
 
 /**
  * music/ 与 audio/ 之间唯一的数据契约。
@@ -56,4 +64,10 @@ export function mergePlans(...plans: PlaybackPlan[]): PlaybackPlan {
 
 function endOf(events: readonly PlaybackEvent[]): number {
   return events.reduce((max, e) => Math.max(max, e.atSec + e.durSec), 0)
+}
+
+/** 播放选项（音频层解释，music 层只声明） */
+export interface PlayOptions {
+  /** 相对计划起点的秒数：此前本该结束的声部，释音尾巴截到这里（FWD-5） */
+  cutContextAtSec?: number
 }

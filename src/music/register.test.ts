@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { doMidiForKey, degreeToMidi, degreeToMidiFromTonic, tonicMidi } from './register'
+import { foldPlanToRange, doMidiForKey, degreeToMidi, degreeToMidiFromTonic, tonicMidi } from './register'
+import type { PlaybackPlan } from './playback'
+import { generateBoss } from '../boss/generate'
+import { renderPiece } from '../boss/render'
+import { buildCurriculum } from '../curriculum/curriculum'
 import { degreeToPitchClass, SCALE_DEGREES, type Key } from './key'
 
 const C_MAJOR: Key = { tonic: 0, mode: 'major' }
@@ -83,5 +87,29 @@ describe('degreeToMidiFromTonic', () => {
     expect(degreeToMidiFromTonic('do', A_MINOR, 57)).toBe(tonic + 3)
     expect(degreeToMidiFromTonic('ti', A_MINOR, 57)).toBe(tonic + 2)
     expect(degreeToMidiFromTonic('le', A_MINOR, 57)).toBe(tonic + 11)
+  })
+})
+
+describe('foldPlanToRange：鼓事件', () => {
+  const plan: PlaybackPlan = {
+    events: [
+      { atSec: 0, freqHz: 0, durSec: 0.1, timbreId: 'piano', gain: 1, drum: 'kick' },
+      { atSec: 0, freqHz: 0, durSec: 0.1, timbreId: 'piano', gain: 1 },
+      { atSec: 0.5, freqHz: 110, durSec: 0.5, timbreId: 'piano', gain: 1 },
+    ],
+    totalDurSec: 1,
+  }
+  it('含鼓（或频率为 0）的计划能折叠完成，鼓事件原样不动', () => {
+    const out = foldPlanToRange(plan, 60, 84)
+    expect(out.events[0]).toBe(plan.events[0])
+    expect(out.events[1]).toBe(plan.events[1])
+    expect(out.events[2].freqHz).toBeCloseTo(440)
+  })
+  it('渲染出的实战关计划穿过 foldPlanToRange 不挂死', { timeout: 2000 }, () => {
+    const ch = generateBoss(buildCurriculum(), 'P4', 3)
+    const r = renderPiece(ch.piece)
+    const out = foldPlanToRange(r.plan, 36, 96)
+    expect(out.events).toHaveLength(r.plan.events.length)
+    for (const [i, e] of out.events.entries()) if (e.drum) expect(e).toBe(r.plan.events[i])
   })
 })

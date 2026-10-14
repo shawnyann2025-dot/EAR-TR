@@ -1,7 +1,13 @@
+import { generateBoss } from '../boss/generate'
+import type { BossGrade } from '../boss/grade'
+import { BOSS_ATTEMPTS_PER_DAY, type BossChallenge } from '../boss/types'
 import type { Curriculum } from '../curriculum/curriculum'
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
-import type { PlaybackPlan } from '../music/playback'
+import type { PlaybackPlan, PlayOptions } from '../music/playback'
+import { fitToRange } from '../pitch/range'
 import type { MasteryState } from '../scheduling/mastery'
+import { evaluateGate, nextPhase } from '../scheduling/gate'
 import { buildSessionPlan } from '../scheduling/scheduler'
 import { createDrill, createSession, reduce, resumeSession, toRecord } from '../session/machine'
 import { dayIndex, sessionSeed } from '../session/time'
@@ -10,7 +16,7 @@ import { parseBundle } from '../storage/bundle'
 import { SCHEMA_VERSION, type Profile, type Repository } from '../storage/types'
 
 export interface AudioPort {
-  play(plan: PlaybackPlan): { startSec: number; endSec: number }
+  play(plan: PlaybackPlan, opts?: PlayOptions): { startSec: number; endSec: number }
   stopAll(): void
   readonly currentTime: number
 }
@@ -39,6 +45,16 @@ export interface RuntimeSnapshot {
   storageError: string | null
   /** 最近一次导入前自动导出的备份（JSON 字符串）；未导入过为 null */
   lastBackup: string | null
+  /** 当前题的播放起点与内容起点（打拍零点用）；无播放时为 null */
+  playback: { startSec: number; contentStartSec: number } | null
+}
+
+export interface BossStatus {
+  phaseId: PhaseId
+  masteryReady: boolean
+  blockingKeys: number
+  attemptsToday: number
+  remainingToday: number
 }
 
 export interface Runtime {
@@ -52,6 +68,9 @@ export interface Runtime {
   dispatch(event: SessionEvent): Promise<void>
   /** 合并补丁到当前 Profile 并保存（缓存与落盘同步更新） */
   updateProfile(patch: Partial<Omit<Profile, 'id' | 'schemaVersion'>>): Promise<Profile>
+  bossStatus(): Promise<BossStatus>
+  newBossChallenge(): Promise<BossChallenge>
+  recordBossAttempt(ch: BossChallenge, grade: BossGrade): Promise<{ advancedTo: PhaseId | null; remainingToday: number }>
   exportBundle(): Promise<string>
   /** 先校验（坏包抛 StorageImportError，不动任何数据），再自动备份、替换、重置缓存 */
   importBundle(json: string): Promise<void>
@@ -60,7 +79,7 @@ export interface Runtime {
 /** 薄壳（P-3 spec §5）：持有状态与掌握度副本，按顺序执行状态机的副作用 */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const { repo, audio, timer, curriculum } = deps
-  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null }
+  let snapshot: RuntimeSnapshot = { profile: null, session: null, storage: 'ok', lastError: null, storageError: null, lastBackup: null, playback: null }
   let mastery = new Map<MasteryKey, MasteryState>()
   let cancelTimer: (() => void) | null = null
   let queue: Promise<void> = Promise.resolve()
@@ -115,11 +134,36 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
 
   const today = (p: Profile) => dayIndex(p.createdAtLocalDate, deps.todayLocalDate())
 
+  async function attemptsOn(phaseId: PhaseId, day: number): Promise<number> {
+    return (await repo.listBossAttempts(phaseId)).filter((a) => a.day === day).length
+  }
+  /** 本运行实例已发出的挑战数：中途离开不记尝试，但再进必须是新片段（P-5 spec §4.4） */
+  let bossStarted = 0
+
+  async function bossStatusNow(): Promise<BossStatus> {
+    const p = await ensureProfileNow()
+    const day = today(p)
+    const gate = evaluateGate(curriculum, await repo.loadMastery(), p.phaseId, true)
+    const attemptsToday = await attemptsOn(p.phaseId, day)
+    return {
+      phaseId: p.phaseId,
+      masteryReady: gate.blockingKeys.length === 0,
+      blockingKeys: gate.blockingKeys.length,
+      attemptsToday,
+      remainingToday: Math.max(0, BOSS_ATTEMPTS_PER_DAY - attemptsToday),
+    }
+  }
+
   async function run(effect: SessionEffect): Promise<void> {
     switch (effect.type) {
       case 'play': {
         cancelTimer?.()
-        const { endSec } = audio.play(effect.plan)
+        // 先清空：play 若抛错，不能残留上一道题的播放信息
+        set({ playback: null })
+        // 先停掉上一段（UI 的重听/慢放），免得叠在新题上
+        audio.stopAll()
+        const { startSec, endSec } = audio.play(effect.plan, { cutContextAtSec: effect.contentStartSec })
+        set({ playback: { startSec, contentStartSec: effect.contentStartSec } })
         cancelTimer = timer.after(Math.max(0, endSec - audio.currentTime), () => {
           cancelTimer = null
           dispatch({ type: 'contentPlayed' }).catch((e) => set({ lastError: describe(e) }))
@@ -130,6 +174,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         cancelTimer?.()
         cancelTimer = null
         audio.stopAll()
+        set({ playback: null })
         return
       case 'saveMastery':
         return write(() => repo.putMastery(effect.key, effect.state))
@@ -137,15 +182,6 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         return write(() => repo.appendAttempt(effect.attempt))
       case 'saveSession':
         return write(() => repo.putSession(effect.record))
-      case 'advancePhase': {
-        const cur = snapshot.profile ?? (await ensureProfileNow())
-        // 只在仍处于 from 阶段时推进：重复结束不重复写关卡记录，也绝不把已更靠后的阶段拉回去
-        if (cur.phaseId !== effect.from) return
-        const p = { ...cur, phaseId: effect.to }
-        set({ profile: p })
-        await write(() => repo.saveProfile(p))
-        return write(() => repo.putGate({ phaseId: effect.from, passedOnDay: effect.day }))
-      }
       case 'itemError':
         set({ lastError: effect.message })
         return
@@ -157,7 +193,12 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   async function dispatchNow(event: SessionEvent): Promise<void> {
     const session = snapshot.session
     if (!session) return
-    const { state, effects } = reduce(session, event, { curriculum, mastery, nowIso: deps.nowIso() })
+    const { state, effects } = reduce(session, event, {
+      curriculum,
+      mastery,
+      nowIso: deps.nowIso(),
+      transformExercise: (ex) => fitToRange(ex, snapshot.profile?.vocalRange ?? null),
+    })
     set({ session: state })
     // 掌握度副本先同步更新，之后任何 await 都不会让后续 reduce 读到旧值
     for (const e of effects) if (e.type === 'saveMastery') mastery = new Map(mastery).set(e.key, e.state)
@@ -248,6 +289,41 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       notify()
       return p
     }),
+    bossStatus: () => serial(bossStatusNow),
+    newBossChallenge: () =>
+      serial(async () => {
+        const s = await bossStatusNow()
+        if (!s.masteryReady) throw new Error('掌握度还没达标，暂时不能挑战实战关')
+        if (s.remainingToday <= 0) throw new Error('今天的挑战次数已用完，明天再来')
+        const p = snapshot.profile!
+        return generateBoss(curriculum, s.phaseId, sessionSeed(p.id, today(p), 1000 + s.attemptsToday * 100 + bossStarted++))
+      }),
+    recordBossAttempt: (ch: BossChallenge, grade: BossGrade) =>
+      serial(async () => {
+        const p = await ensureProfileNow()
+        const day = today(p)
+        const phaseId = ch.piece.phaseId
+        const used = await attemptsOn(phaseId, day)
+        if (used >= BOSS_ATTEMPTS_PER_DAY) throw new Error('今天的挑战次数已用完，明天再来')
+        const alreadyPassed = (await repo.listBossAttempts(phaseId)).some((a) => a.passed)
+        await write(() =>
+          repo.appendBossAttempt({ phaseId, day, seed: ch.piece.seed, parts: { ...grade.parts } as Record<string, number>, passed: grade.passed, at: deps.nowIso() }),
+        )
+        let advancedTo: PhaseId | null = null
+        if (grade.passed && p.phaseId === ch.piece.phaseId) {
+          const to = nextPhase(p.phaseId)
+          if (to) {
+            const next = { ...p, phaseId: to }
+            set({ profile: next })
+            await write(() => repo.saveProfile(next))
+            advancedTo = to
+          }
+          if (!alreadyPassed) await write(() => repo.putGate({ phaseId, passedOnDay: day }))
+        }
+        notify()
+        const remainingToday = Math.max(0, BOSS_ATTEMPTS_PER_DAY - (await attemptsOn(snapshot.profile!.phaseId, day)))
+        return { advancedTo, remainingToday }
+      }),
     exportBundle: () => serial(async () => JSON.stringify(await repo.exportAll(deps.nowIso()))),
     importBundle: (json) => serial(async () => {
       const bundle = parseBundle(json) // 先校验：失败即抛，不碰任何东西
@@ -255,7 +331,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
       await run({ type: 'stopAudio' }) // 有进行中的会话时停播并取消计时
       await repo.importAll(bundle)
       mastery = new Map()
-      set({ profile: null, session: null, lastBackup: backup })
+      set({ profile: null, session: null, lastBackup: backup, playback: null })
       await ensureProfileNow()
       notify()
     }),

@@ -1,10 +1,11 @@
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
 import type { DisplayScheme } from '../music/display'
+import type { VocalRange } from '../pitch/range'
 import type { MasteryState } from '../scheduling/mastery'
 import type { AttemptRecord, SessionRecord } from '../session/types'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 /** 作答全量留存上限（主 spec §10.2） */
 export const ATTEMPT_CAP = 50_000
 
@@ -16,11 +17,27 @@ export interface Profile {
   displayScheme: DisplayScheme
   placement: { done: boolean; startPhase: PhaseId | null }
   schemaVersion: number
+  /** P-4：undefined = 从未问过（首次使用后会进入音域测定）；null = 跳过 */
+  vocalRange?: VocalRange | null
+  /** P-4：唱题判定方式，缺省 'detect' */
+  singMode?: 'detect' | 'self'
+  /** P-4：自动回落自评的原因 */
+  micFallbackReason?: 'denied' | 'unsupported'
 }
 
 export interface GateRecord {
   phaseId: PhaseId
   passedOnDay: number
+}
+
+/** 实战关一次提交（P-5b）：parts 为各部分正确率 */
+export interface BossAttempt {
+  phaseId: PhaseId
+  day: number
+  seed: number
+  parts: Record<string, number>
+  passed: boolean
+  at: string
 }
 
 export interface AttemptAggregate {
@@ -38,6 +55,7 @@ export interface ExportBundle {
   attemptAggregates: AttemptAggregate[]
   sessions: SessionRecord[]
   gates: GateRecord[]
+  bossAttempts: BossAttempt[]
 }
 
 export interface Repository {
@@ -51,6 +69,9 @@ export interface Repository {
   latestSessionNo(day: number): Promise<number | null>
   putSession(r: SessionRecord): Promise<void>
   putGate(g: GateRecord): Promise<void>
+  appendBossAttempt(a: BossAttempt): Promise<void>
+  /** 按写入顺序；可按阶段过滤 */
+  listBossAttempts(phaseId?: PhaseId): Promise<BossAttempt[]>
   exportAll(exportedAt: string): Promise<ExportBundle>
   /** 先校验与迁移再整体替换；任何一步失败都不改现有数据 */
   importAll(bundle: ExportBundle): Promise<void>

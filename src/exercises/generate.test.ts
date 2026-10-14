@@ -133,9 +133,15 @@ describe('generate：快照（固定 seed）', () => {
     ['弱起·听辨', { kpId: 'rhythm:anacrusis', track: 'R', modality: 'recognize', contextLevel: 4, variationLevel: 6, difficultyStep: 5, seed: 307 }],
     ['混合拍子·听写', { kpId: 'rhythm:mixed-meter', track: 'R', modality: 'notate', contextLevel: 2, variationLevel: 6, seed: 308 }],
   ]
+  // 频率等浮点值取 10 位有效数字：不同 Node/V8 版本的 Math.pow 末位可能不同（CI 与本机）
+  const roundFloats = (v: unknown): unknown =>
+    typeof v === 'number' && !Number.isInteger(v) ? Number(v.toPrecision(10))
+    : Array.isArray(v) ? v.map(roundFloats)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, roundFloats(x)]))
+    : v
   for (const [name, o] of cases) {
     it(name, () => {
-      expect(generate(spec(o), c)).toMatchSnapshot()
+      expect(roundFloats(generate(spec(o), c))).toMatchSnapshot()
     })
   }
 })

@@ -1,3 +1,4 @@
+import type { PhaseId } from '../curriculum/stages'
 import type { MasteryKey } from '../curriculum/knowledgePoints'
 import type { MasteryState } from '../scheduling/mastery'
 import type { AttemptRecord, SessionRecord } from '../session/types'
@@ -6,6 +7,7 @@ import {
   ATTEMPT_CAP,
   SCHEMA_VERSION,
   type AttemptAggregate,
+  type BossAttempt,
   type ExportBundle,
   type GateRecord,
   type Profile,
@@ -25,6 +27,7 @@ export class MemoryRepository implements Repository {
   private aggregates: AttemptAggregate[] = []
   private sessions = new Map<string, SessionRecord>()
   private gates: GateRecord[] = []
+  private bossAttempts: BossAttempt[] = []
   private readonly cap: number
 
   constructor(opts: { attemptCap?: number } = {}) {
@@ -65,6 +68,12 @@ export class MemoryRepository implements Repository {
   async putGate(g: GateRecord) {
     this.gates.push(clone(g))
   }
+  async appendBossAttempt(a: BossAttempt) {
+    this.bossAttempts.push(clone(a))
+  }
+  async listBossAttempts(phaseId?: PhaseId) {
+    return clone(this.bossAttempts.filter((a) => phaseId === undefined || a.phaseId === phaseId))
+  }
   async exportAll(exportedAt: string): Promise<ExportBundle> {
     return clone({
       schemaVersion: SCHEMA_VERSION,
@@ -75,6 +84,7 @@ export class MemoryRepository implements Repository {
       attemptAggregates: [...this.aggregates].sort((a, b) => byKey(a.key, b.key)),
       sessions: [...this.sessions.values()].sort((a, b) => a.day - b.day || a.sessionNo - b.sessionNo),
       gates: this.gates,
+      bossAttempts: this.bossAttempts,
     })
   }
   async importAll(bundle: ExportBundle) {
@@ -87,5 +97,6 @@ export class MemoryRepository implements Repository {
     this.aggregates = b.attemptAggregates
     this.sessions = sessions
     this.gates = b.gates
+    this.bossAttempts = b.bossAttempts ?? []
   }
 }

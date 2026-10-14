@@ -17,6 +17,23 @@ function freshSession(): SessionState {
 const types = (effects: SessionEffect[]) => effects.map((e) => e.type)
 
 describe('出题', () => {
+  it('transformExercise：出题后对题目做变换，播放用变换后的计划', () => {
+    const s0 = freshSession()
+    let calls = 0
+    const r = reduce(s0, { type: 'start' }, { ...ctx(), transformExercise: (ex) => { calls++; return { ...ex, contentStartSec: 99 } } })
+    expect(calls).toBe(1)
+    expect(r.state.current!.exercise.contentStartSec).toBe(99)
+    const play = r.effects[0]
+    if (play.type !== 'play') throw new Error()
+    expect(play.contentStartSec).toBe(99)
+  })
+  it('play 副作用带上题目内容起点', () => {
+    const r = reduce(freshSession(), { type: 'start' }, ctx())
+    const play = r.effects[0]
+    if (play.type !== 'play') throw new Error('应先 play')
+    expect(play.contentStartSec).toBe(r.state.current!.exercise.contentStartSec)
+  })
+
   it('start：出第一道计划题并播放，进入 presenting', () => {
     const s0 = freshSession()
     const r = reduce(s0, { type: 'start' }, ctx())
