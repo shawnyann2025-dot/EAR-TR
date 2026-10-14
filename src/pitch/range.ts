@@ -1,5 +1,5 @@
 import type { Exercise, PitchTarget } from '../exercises/types'
-import type { PlaybackPlan } from '../music/playback'
+import { isPitched, type PlaybackPlan } from '../music/playback'
 import { freqToMidi } from '../music/pitch'
 
 export interface VocalRange {
@@ -10,8 +10,9 @@ export interface VocalRange {
 /** P-4b 裁定：搬移后计划里最低的事件不低于此（手机外放在 C2 以下几乎无声） */
 export const MIN_CONTEXT_MIDI = 36
 
-const lowestMidi = (plans: PlaybackPlan[]) =>
-  Math.min(...plans.flatMap((p) => p.events.map((e) => freqToMidi(e.freqHz))))
+/** 最低的有音高事件（鼓不算）；没有则 Infinity */
+export const lowestMidi = (plans: PlaybackPlan[]) =>
+  Math.min(...plans.flatMap((p) => p.events.filter(isPitched).map((e) => freqToMidi(e.freqHz))))
 
 export type VoicePreset = 'bass' | 'tenor' | 'alto' | 'soprano'
 

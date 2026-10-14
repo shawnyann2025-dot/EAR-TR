@@ -19,6 +19,9 @@ export interface PlaybackEvent {
   drum?: DrumId
 }
 
+/** 是否为有音高的事件（非鼓、频率为正）；折叠、搬移、取最低音等按频率换算 MIDI 的代码都须先过这一关 */
+export const isPitched = (e: PlaybackEvent): boolean => !e.drum && e.freqHz > 0
+
 /**
  * music/ 与 audio/ 之间唯一的数据契约。
  * 声明式：描述「什么时刻、什么频率、什么音色、多长、多响」，不含任何播放机制。

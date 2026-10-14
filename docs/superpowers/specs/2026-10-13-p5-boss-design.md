@@ -18,60 +18,112 @@
 
 ## 3. 片段与关卡（P-5a）
 
-### 3.1 片段模型（`src/boss/piece.ts`）
+### 3.1 片段模型（`src/boss/types.ts`、`material.ts`、`generate.ts`、`render.ts`）
+
+文件分工：`types.ts`（类型与常量）、`material.ts`（由课程静态推导已解锁素材）、`generate.ts`（五个关卡的生成器，入口 `generateBoss(c, phaseId, seed)`）、`render.ts`（片段 → `PlaybackPlan`）、`grade.ts`、`answerability.ts`；鼓的合成参数在 `src/audio/drums.ts`。`src/boss` 零 IO、不用随机数以外的非确定来源；只有 `simulation/runSimulation.ts` 依赖它。
 
 ```ts
+interface MelodyNote {
+  degree: ScaleDegree
+  octave: number                  // 相对所在调「本位 do」（离 MELODY_CENTER_MIDI = 67 最近的 do）的八度数
+  keyIndex: 0 | 1                 // 0 原调，1 转调后（仅 P5）
+  atBeat: number                  // 从第一小节起的四分音符拍数（不含预备拍）
+  durBeats: number
+}
+
 interface Piece {
-  key: Key
-  bpm: number                     // 感知拍速度（与 P-2b-R 约定一致）
-  meter: Meter
+  phaseId: PhaseId
+  seed: number
+  keys: Key[]                     // keys[0] 原调；P5 另有 keys[1] 新调
+  modulationBar: number | null    // 新调开始的小节（0 起），P5 为 4；无转调为 null
+  bpm: number                     // 感知拍速度（P1 为 80，其余 90）
+  meterId: MeterId                // '2/4' | '3/4' | '4/4'
   bars: number
-  melody: MelodyNote[]            // { degree: ScaleDegree; bar: number; atBeat: number; durBeats: number }
-  chords: ChordSymbol[] | null    // 每小节一个和弦 id（如 'I'、'vi'、'bVII'），无和声的关卡为 null
-  bass: 'root' | 'none'           // 贝斯走和弦根音（或转位指定的低音）
+  melody: MelodyNote[]
+  chords: string[] | null         // 每小节一个所在调的级数 id；无和声的关卡为 null
+  rhythm: string[] | null         // 每小节一个音型 id，仅节奏是作答部分时（P4）；否则 null
+  inversions: (0 | 1)[] | null    // 每小节和弦的转位（渲染低音用），仅 P4 且已解锁第一转位时有
   drums: boolean
-  modulation: { atBar: number; newKey: Key } | null   // 仅 P5
 }
 ```
 
-- `renderPiece(piece): { plan: PlaybackPlan; phrases: { startSec: number; endSec: number; bars: [number, number] }[] }`：乐句按 2 小节切分，窗口首尾相接、覆盖全曲、互不重叠。
-- 声部：旋律（`voice` 或 `piano` 音色）、和弦（`strings`，经 `voiceChord` 排列，FWD-3 已落地）、贝斯（`piano` 低八度或专用低音）、鼓（新音色）。所有声部的音区限制沿用 FWD-4：最低 MIDI 36、最高 MIDI 96。
+- 没有单独的 `bass` 字段：低音由 `chords`（与 `inversions`）在渲染时推出。
+- `renderPiece(piece): RenderedPiece`，`RenderedPiece = { plan: PlaybackPlan; countInSec: number; barSec: number; phrases: { startSec: number; endSec: number }[] }`。乐句按 `PHRASE_BARS = 2` 小节切分，窗口首尾相接、覆盖全曲、互不重叠；窗口的**小节号**不在这里，在 `BossChallenge.phrases`（见 §3.3），两者按下标对齐。
+- `phrasePlan(r, i): PlaybackPlan`：取第 i 句的窗口，重定位到开头，前面接同一段预备拍；用于「重听本句」。
+- 预备拍：4 个等距的踩镲，与拍号无关（只给速度，不泄露拍号）。
+- 声部：旋律（`piano`）、和弦（`strings`，经 `voiceChord` 排列，增益 0.22）、低音（`piano`，和弦根音或第一转位的低音，4/4 在第 1、3 拍各一次）、鼓。和弦根音的下限为 MIDI 48。
+- **待办（P-5b）**：弦乐层 0.22 的响度需在手机上实听确认，不够再调。
+- 音区：旋律音域 −5…+11 半音（相对原调本位 do，跨度 ≤ 16 半音）；所有调用 `foldPlanToRange` 等 FWD-4 工具时须先过滤鼓事件（`isPitched`），鼓事件的 `freqHz` 为 0。
 
-### 3.2 鼓音色（`src/audio/`）
+### 3.2 鼓音色（`src/audio/drums.ts`）
 
-- 新增 `DrumId = 'kick' | 'snare' | 'hat'`，以 `PlaybackEvent.drum` 标记鼓事件（不新增 `TimbreId`，鼓不进音色变异轴）：`kick` 正弦起音后快速下滑音高（150→50 Hz）；`snare` 带通白噪声（1800 Hz）；`hat` 高通白噪声（7000 Hz），极短。
-- `AudioEngine` 增加一份共享的白噪声 `AudioBuffer` 与 `AudioBufferSourceNode` 路径；鼓事件的 `freqHz` 与 `timbreId` 被忽略。
-- 鼓型（`src/boss/drums.ts`）：底鼓在每小节第一拍（4/4 再加第三拍），军鼓在反拍（2/4、4/4 的第 2、4 拍；3/4 无军鼓），踩镲每个感知拍一下（4/4 为八分音符）。
+- 新增 `DrumId = 'kick' | 'snare' | 'hat'`，以 `PlaybackEvent.drum` 标记鼓事件（不新增 `TimbreId`，鼓不进音色变异轴；`planToVoices` 把它们滤出音色轴）：`kick` 正弦起音后快速下滑音高（150→50 Hz）；`snare` 带通白噪声（1800 Hz）；`hat` 高通白噪声（7000 Hz），极短。
+- `AudioEngine` 增加一份共享、确定的白噪声 `AudioBuffer` 与 `AudioBufferSourceNode` 路径；鼓事件的 `freqHz` 与 `timbreId` 被忽略。
+- 鼓型（在 `render.ts` 的 `drumBar`）：
+  - P1：只在每小节第 1 拍落底鼓、每拍踩镲，**无军鼓**——拍号可听，但鼓型不泄露拍号；
+  - 其余阶段：底鼓在每小节第一拍（4/4 再加第三拍），军鼓在反拍（2/4 第 2 拍；4/4 第 2、4 拍；3/4 无军鼓），踩镲每个感知拍一下（4/4 为八分音符）。
 
-### 3.3 五个关卡生成器（`src/boss/generators.ts`）
+### 3.3 五个关卡生成器（`src/boss/generate.ts`）
 
-每个生成器只用该阶段（含之前阶段）已解锁的素材；素材集合由课程静态推导（与 P-2b「由课程静态推导」一致）。
+每个生成器只用该阶段（含之前阶段）已解锁的素材；素材集合由课程静态推导（`bossMaterial`）。
 
 | 阶段 | 片段 | 作答部分 |
 |---|---|---|
 | P1 | 8 小节；五声旋律（do re mi sol la）；拍号取已解锁的 2/4、3/4 与基础 4/4 之一；节奏只用四分与八分一对 | 旋律音级、拍号 |
 | P2 | 16 小节大调旋律（七个音级）；节奏用已解锁音型 | 旋律音级 |
-| P3 | 4 和弦循环（取已解锁的进行，循环 2–4 次）+ 旋律（落在和弦音上为主） | 每小节和弦级数、旋律音级 |
-| P4 | 流行歌片段：已解锁的和弦（含七和弦、转位）、旋律、节奏型 | 每小节和弦、旋律音级、每小节节奏型 |
-| P5 | 转调片段：前半在原调、后半在新调（关系调或属/下属调），可含借用和弦 bVI、bVII 与 V/V | 每小节和弦（按各自所在调的级数）、旋律音级（按所在调）、新调主音在原调中的音级 |
+| P3 | 4 和弦循环（取已解锁的进行，循环到 8 小节）+ 旋律（每小节首音落在和弦音上） | 每小节和弦级数、旋律音级 |
+| P4 | 流行歌片段 8 小节：已解锁的和弦（含七和弦）、旋律、节奏型；已解锁第一转位时部分小节取第一转位（低音随之变化，**答案仍是级数 id，不受转位影响**） | 每小节和弦、旋律音级、每小节节奏型 |
+| P5 | 转调片段 8 小节：前 4 小节原调、后 4 小节新调；新调**只取属调或下属调**（原调主音 +7 或 +5 个半音），可含借用和弦 bVI、bVII 与 V/V；第 7 小节（下标 6）为新调的 V7（带出新调的 fi 或 te，确立新调） | 每小节和弦（按各自所在调的级数）、旋律音级（按所在调）、新调主音在原调中的音级 |
 
 - 片段由 `seed` 决定（`makeRng`），同一 seed 同一片段。
-- 旋律生成的约束：每句以稳定音级（do、mi、sol）收尾；跳进不超过五度；末句收于主音。
-- 答案：`BossAnswer = { parts: { melody?: string[][]; chords?: string[]; rhythm?: string[]; meter?: string; newTonicDegree?: string } }`，`melody` 按乐句分组（每句一个音级 id 序列）。
+- `modulationBar`（4）必须是 `PHRASE_BARS` 的整数倍，这样没有乐句跨越转调，「按所在调作答」对每一句都无歧义（有测试断言）。
+- 旋律生成的约束（先逐音确定合法音高集合，再自后向前剔除无法衔接的、自前向后选取，因此不会无解）：
+  - 音域跨度 ≤ 16 半音（−5…+11）；相邻两音的音程 ≤ 7 半音（纯五度）；
+  - 每句以稳定音级（do、mi、sol）收尾，优先取该小节的和弦音；末音为主音 do；
+  - **句末音落在拍上**（句末小节的音型只选最后一个音在拍上的）；
+  - 有和声的小节，首音落在和弦音上；
+  - 在 bVI、bVII、V/V 上，旋律避开与和弦音成小二度的音级；
+  - 越界的随机游走反射而不是钳位。
+- 答案（`types.ts`，平铺，不再有 `parts` 包层）：
+
+```ts
+interface BossAnswer {
+  melody: string[][]     // 按乐句分组的旋律音级 id
+  chords?: string[]      // 每小节
+  rhythm?: string[]      // 每小节（P4）
+  meter?: string         // P1
+  newTonic?: string      // P5：新调主音在原调中的音级（字母表 re fa sol la，实际取 sol 或 fa）
+}
+type BossResponse = BossAnswer
+
+interface Phrase { index: number; startBar: number; endBar: number /* 不含 */; melodyCount: number }
+
+interface BossChallenge {
+  piece: Piece
+  parts: PartId[]        // 'melody' | 'chords' | 'rhythm' | 'meter' | 'newTonic'，本关要判定的部分
+  phrases: Phrase[]      // 每句的小节范围与旋律音数（作答区长度）
+  answer: BossAnswer
+  alphabets: { melody: string[]; chords?: string[]; rhythm?: string[]; meter?: string[]; newTonic?: string[] }
+}
+```
+
+- 每句的和弦、节奏答案是 `answer.chords.slice(startBar, endBar)` 等。P5 后半（第 5–8 小节）的和弦与旋律音级相对**新调**。
 
 ### 3.4 判定（`src/boss/grade.ts`）
 
-- 旋律：逐句逐位比对，正确率 = 对的音数 / 总音数；作答长度不足的位置记错。
+- 旋律：逐句逐位比对，正确率 = 对的音数 / 总音数；作答缺失或长度不足的位置记错，多出的忽略。
 - 和弦、节奏：逐小节比对。
 - 拍号、新调主音：单题，对 = 1、错 = 0。
-- `gradeBoss(answer, response): { parts: Record<PartId, number>; passed: boolean }`，`passed` = 每个部分 ≥ `BOSS_PASS_RATIO = 0.9`。
-- 显示文案复用 `src/ui/labels.ts`（音级、和弦、音型、拍号）。
+- `gradeBoss(ch: BossChallenge, r: BossResponse): BossGrade`，`BossGrade = { parts: Partial<Record<PartId, number>>; passed: boolean; marks: { melody: boolean[][]; chords?: boolean[]; rhythm?: boolean[]; meter?: boolean; newTonic?: boolean } }`。只判定 `ch.parts` 里的部分；`passed` = 每个部分 ≥ `BOSS_PASS_RATIO = 0.9`（容差 1e-12）。
+- `marks` 是逐位对错，结果页的逐句对照（✓ / ✗）直接用它。
+- 显示文案复用 `src/ui/labels.ts`（音级、和弦、音型、拍号）。P-5b 的提示映射：旋律 → `notate-melody`，和弦 → `notate-chords`，节奏 → `notate-patterns`，拍号 → `which-meter`，新调主音 → `new-tonic-degree`；`mode: 'major'`。
 
-### 3.5 仿真可答性（`src/simulation/`）
+### 3.5 仿真可答性（`src/boss/answerability.ts`、`src/simulation/runSimulation.ts`）
 
-- 去掉 `BOSS_ABILITY_THRESHOLD`。仿真到达关卡条件（阻塞项为 0）后，生成该阶段的真实关卡（seed 由仿真 rng 派生），虚拟学习者按每个作答位置对应知识点的能力（旋律音级 → 对应 `degree:*` 的听写模态；和弦 → 对应和弦知识点的听写模态；节奏 → 对应音型；拍号 → `meter-*`）逐位抽样作答，再用 `gradeBoss` 判定。
+- 去掉 `BOSS_ABILITY_THRESHOLD`。仿真到达关卡条件（阻塞项为 0）后，生成该阶段的真实关卡，虚拟学习者按每个作答位置对应知识点的能力（`positionKpIds`：旋律音级 → `degree:major:*`；和弦 → 对应和弦知识点；节奏 → 对应音型的所属知识点；拍号 → `rhythm:meter-2-4` / `meter-3-4` / 4/4 对应 `rhythm:beat-one`；新调主音 → `degree:modulation:shift`）、以固定难度（`BOSS_SPEC_LEVEL`）的听写题概率（`probabilityOf`，纯函数、不改能力）逐位抽样作答，再用 `gradeBoss` 判定。
+- seed 的派生与 `runSimulation` 一致：`bossSeed = (Math.imul(params.seed ^ 0x5bd1e995, 31) + day * 7 + attempt) >>> 0`（`attempt < 3`，每个 `(seed, day, attempt)` 唯一）；关卡由 `makeRng(bossSeed)` 生成，作答用独立的 `makeRng(bossSeed ^ 0x9e3779b9)`，不消耗学习者的 rng。
 - 每天最多 3 次尝试，与 D2 一致。
-- **节奏风险**：替换后阶段完成天数可能变化。若超出主 spec §8.2 的周期目标（或现有仿真断言），停下交用户裁定，不擅自调参。
+- **节奏风险**：已实测，结果与旧阈值相同（实战关不构成阻塞），节奏偏差为既有问题，用户裁定另议（见主 spec §13.1 的状态注记）。
 
 ## 4. 界面与接入（P-5b）
 
@@ -85,10 +137,11 @@ interface Piece {
 
 1. 说明：本关包含哪些部分、每句可无限重听、整曲最多再听 3 次、每部分 ≥ 90% 才通过。
 2. 「听整曲」。
-3. 逐句：显示「第 n / N 句」、该句的作答区（旋律音级序列——长度已知；按阶段加每小节和弦、每小节节奏型）、「重听本句」、「重听整曲（剩 k 次）」、「下一句」。已提交的句子不能返回修改。
-4. 最后一页：单题部分（拍号或新调主音）。
-5. 提交 → 结果：各部分百分比、是否通过、逐句对照（对 ✓ / 错 ✗）。
-6. 通过 → 升阶段并写 `GateRecord`；没过 → 「换一段再试」（当天剩余次数），或回首页。
+3. **P1 的拍号题紧接在「听整曲」之后、任何乐句页之前**：乐句页显示的每句音数会泄露拍号，所以拍号必须先答、答后锁定。
+4. 逐句：显示「第 n / N 句」、该句的作答区（旋律音级序列——长度已知；按阶段加每小节和弦、每小节节奏型）、「重听本句」、「重听整曲（剩 k 次）」、「下一句」。已提交的句子不能返回修改。
+5. 最后一页：新调主音题（P5）。P5 的作答区文案必须写明「第 5–8 小节按新调标注」。
+6. 提交 → 结果：各部分百分比、是否通过、逐句对照（对 ✓ / 错 ✗）。
+7. 通过 → 升阶段并写 `GateRecord`；没过 → 「换一段再试」（当天剩余次数），或回首页。
 
 作答控件复用 P-3b 的 `SequenceControl`、`ChoiceControl` 与文案表。打拍不参与实战关（节奏以音型选择作答）。
 

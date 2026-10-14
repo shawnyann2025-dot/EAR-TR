@@ -1,5 +1,5 @@
 import { freqToMidi } from './pitch'
-import type { PlaybackPlan } from './playback'
+import { isPitched, type PlaybackPlan } from './playback'
 import {
   DEGREE_SEMITONES,
   doReference,
@@ -44,6 +44,7 @@ export function foldPlanToRange(
     throw new Error(`折叠区间必须至少一个八度，收到 ${loMidi}–${hiMidi}`)
   }
   const events = plan.events.map((e) => {
+    if (!isPitched(e)) return e
     let freqHz = e.freqHz
     let midi = freqToMidi(freqHz)
     while (midi < loMidi - FOLD_EPSILON) {

@@ -10,9 +10,11 @@ const c = buildCurriculum()
 describe('positionKpIds', () => {
   it('每个作答位置都映射到课程里存在的知识点', () => {
     for (const phaseId of ['P1', 'P2', 'P3', 'P4', 'P5'] as const) {
-      const ids = positionKpIds(generateBoss(c, phaseId, 4))
-      const all = [...ids.melody.flat(), ...(ids.chords ?? []), ...(ids.rhythm ?? []), ...(ids.meter ? [ids.meter] : []), ...(ids.newTonic ? [ids.newTonic] : [])]
-      for (const id of all) expect(c.knowledgePoints.has(id), id).toBe(true)
+      for (let seed = 0; seed < 20; seed++) {
+        const ids = positionKpIds(generateBoss(c, phaseId, seed))
+        const all = [...ids.melody.flat(), ...(ids.chords ?? []), ...(ids.rhythm ?? []), ...(ids.meter ? [ids.meter] : []), ...(ids.newTonic ? [ids.newTonic] : [])]
+        for (const id of all) expect(c.knowledgePoints.has(id), `${phaseId} seed ${seed} ${id}`).toBe(true)
+      }
     }
   })
 })

@@ -199,6 +199,7 @@ describe('generateBoss：音乐性约束', () => {
       const [k0, k1] = ch.piece.keys
       const up = (k1.tonic - k0.tonic + 12) % 12
       expect(ch.piece.modulationBar).toBe(4)
+      expect(ch.piece.modulationBar! % PHRASE_BARS).toBe(0)
       expect([5, 7]).toContain(up)
       expect(ch.answer.newTonic).toBe(up === 7 ? 'sol' : 'fa')
       expect(ch.alphabets.newTonic).toEqual(['re', 'fa', 'sol', 'la'])

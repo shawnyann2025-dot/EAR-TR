@@ -3,7 +3,7 @@ import { METERS } from '../exercises/data/rhythms'
 import { voiceChord } from '../music/chord'
 import { DEGREE_SEMITONES, type Key } from '../music/key'
 import { freqToMidi, midiToFreq } from '../music/pitch'
-import type { DrumId, PlaybackEvent, PlaybackPlan } from '../music/playback'
+import { isPitched, type DrumId, type PlaybackEvent, type PlaybackPlan } from '../music/playback'
 import { doMidiForKey } from '../music/register'
 import { MELODY_CENTER_MIDI, PHRASE_BARS, type Piece } from './types'
 
@@ -92,5 +92,5 @@ export function phrasePlan(r: RenderedPiece, i: number): PlaybackPlan {
 }
 
 export function allPitchedMidis(plan: PlaybackPlan): number[] {
-  return plan.events.filter((e) => !e.drum).map((e) => freqToMidi(e.freqHz))
+  return plan.events.filter(isPitched).map((e) => freqToMidi(e.freqHz))
 }
