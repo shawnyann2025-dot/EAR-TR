@@ -263,7 +263,7 @@ describe('createRuntime', () => {
     expect(d.played).toHaveLength(1)
   })
 
-  it('升阶段：advancePhase 更新并保存 Profile、记关卡，下一场按 P2 出题', async () => {
+  it('掌握度达标也不升阶段：Profile 仍在 P1、不记关卡，下一场仍按 P1 出题', async () => {
     const repo = new MemoryRepository()
     const strong = (): MasteryState => ({
       ...initialMastery(),
@@ -283,11 +283,12 @@ describe('createRuntime', () => {
     const rt = createRuntime(deps(repo, '2026-10-13'))
     await rt.startToday()
     expect(rt.getSnapshot().session?.phase).toBe('done')
-    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
-    expect((await repo.loadProfile())?.phaseId).toBe('P2')
-    expect((await repo.exportAll('x')).gates).toEqual([{ phaseId: 'P1', passedOnDay: 30 }])
+    expect(rt.getSnapshot().session?.summary?.gate).toMatchObject({ evaluated: true, masteryReady: true })
+    expect(rt.getSnapshot().profile?.phaseId).toBe('P1')
+    expect((await repo.loadProfile())?.phaseId).toBe('P1')
+    expect((await repo.exportAll('x')).gates).toEqual([])
     await rt.startExtra()
-    expect(rt.getSnapshot().session?.phaseId).toBe('P2')
+    expect(rt.getSnapshot().session?.phaseId).toBe('P1')
     expect(rt.getSnapshot().session?.sessionNo).toBe(1)
   })
 
@@ -321,28 +322,6 @@ describe('createRuntime', () => {
 })
 
 describe('Profile 与导入导出', () => {
-  const strongMastery = (): MasteryState => ({
-    ...initialMastery(),
-    stability: 20,
-    contextLevel: 1,
-    variationLevel: 1,
-    window: Array.from({ length: 20 }, (_, i) => ({ correct: true, day: 10 + i, difficultyStep: 3 })),
-    lastSeenDay: 29,
-  })
-  const profileOf = (phaseId: 'P1' | 'P2'): import('../storage/types').Profile => ({
-    id: 'p-test', createdAtLocalDate: '2026-09-13', phaseId, displayScheme: 'solfege', placement: { done: false, startPhase: null }, schemaVersion: 1,
-  })
-  /** 今天（第 30 天）的主线记录：无题可答、实战关 5/5，开场即结算并升阶段 */
-  const finishingRecord = (): SessionRecord => ({
-    day: 30, sessionNo: 0, phaseId: 'P1', plan: { day: 30, seed: 1, phaseId: 'P1', items: [] }, index: 0,
-    progress: { attempted: 0, correct: 0 }, boss: { attempted: 5, correct: 5 }, byTrack: { T: 0, H: 0, R: 0 }, reliefTriggered: false, completed: false,
-  })
-  async function seedStrongP1(repo: Repository, phaseId: 'P1' | 'P2') {
-    for (const kp of knowledgePointsOfPhase(c, 'P1')) for (const m of MODALITIES) await repo.putMastery(masteryKey(kp, m), strongMastery())
-    await repo.saveProfile(profileOf(phaseId))
-    await repo.putSession(finishingRecord())
-  }
-
   it('updateProfile：合并补丁、落盘、更新快照并通知', async () => {
     const repo = new MemoryRepository()
     const rt = createRuntime(deps(repo))
@@ -356,26 +335,6 @@ describe('Profile 与导入导出', () => {
     const q = await rt.updateProfile({ placement: { done: true, startPhase: 'P2' }, phaseId: 'P2' })
     expect(q).toMatchObject({ displayScheme: 'numeric', phaseId: 'P2', id: 'p-test' })
     expect(await repo.loadProfile()).toEqual(q)
-  })
-
-  it('updateProfile 之后升阶段不会把 displayScheme 写回旧值', async () => {
-    const repo = new MemoryRepository()
-    await seedStrongP1(repo, 'P1')
-    const rt = createRuntime(deps(repo))
-    await rt.updateProfile({ displayScheme: 'numeric' })
-    await rt.startToday()
-    expect(rt.getSnapshot().profile).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
-    expect(await repo.loadProfile()).toMatchObject({ phaseId: 'P2', displayScheme: 'numeric' })
-  })
-
-  it('已在目标阶段时重新结算：不重复保存 Profile，也不重复记关卡', async () => {
-    const repo = new MemoryRepository()
-    await seedStrongP1(repo, 'P2') // 模拟：升阶段已落盘，但会话记录没来得及标完成就被杀
-    const rt = createRuntime(deps(repo))
-    await rt.startToday()
-    expect(rt.getSnapshot().session?.phase).toBe('done')
-    expect(rt.getSnapshot().profile?.phaseId).toBe('P2')
-    expect((await repo.exportAll('x')).gates).toEqual([])
   })
 
   it('ensureProfile 建出 Profile 后通知订阅者', async () => {

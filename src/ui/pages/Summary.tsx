@@ -22,11 +22,9 @@ export function Summary(props: { onHome: () => void }) {
             ))}
           </ul>
           {sum.gate.evaluated ? (
-            <>
-              <p>{sum.gate.blockingKeys === 0 ? '本阶段的掌握度已达标' : `本阶段还差 ${sum.gate.blockingKeys} 项`}</p>
-              <p>实战关：{sum.gate.bossSatisfied ? '达标' : '未达标'}</p>
-              {sum.gate.advancedTo && <p className="good">升入 {sum.gate.advancedTo}！</p>}
-            </>
+            <p className={sum.gate.masteryReady ? 'good' : undefined}>
+              {sum.gate.masteryReady ? '掌握度已达标，可以挑战实战关' : `本阶段还差 ${sum.gate.blockingKeys} 项`}
+            </p>
           ) : (
             <p>本场提前结束，不评估关卡。</p>
           )}

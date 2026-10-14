@@ -3,7 +3,7 @@ import { buildCurriculum, knowledgePointsOfPhase } from '../curriculum/curriculu
 import { MODALITIES, masteryKey } from '../curriculum/knowledgePoints'
 import { initialMastery, type MasteryState } from '../scheduling/mastery'
 import { buildSessionPlan } from '../scheduling/scheduler'
-import { bossPassed, createSession, reduce } from './machine'
+import { createSession, reduce } from './machine'
 import { SESSION_MINUTES, type ReduceContext, type SessionEffect, type SessionState } from './types'
 
 const c = buildCurriculum()
@@ -28,33 +28,20 @@ const allP1Strong = () => {
 const find = <T extends SessionEffect['type']>(effects: SessionEffect[], type: T) =>
   effects.filter((e): e is Extract<SessionEffect, { type: T }> => e.type === type)
 
-describe('bossPassed（P-3 spec D3）', () => {
-  it('至少答过 1 题且正确率 ≥ 0.8', () => {
-    expect(bossPassed({ attempted: 0, correct: 0 })).toBe(false)
-    expect(bossPassed({ attempted: 5, correct: 4 })).toBe(true)
-    expect(bossPassed({ attempted: 5, correct: 3 })).toBe(false)
-  })
-})
-
-describe('结束流程', () => {
-  it('掌握度全部达标 + 实战关替身通过：发 advancePhase P1 → P2，总结记录升阶段', () => {
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 } }), { type: 'start' }, ctx(allP1Strong()))
-    expect(find(r.effects, 'advancePhase')).toEqual([{ type: 'advancePhase', from: 'P1', to: 'P2', day: 30 }])
-    expect(r.state.summary?.gate).toMatchObject({ evaluated: true, passed: true, blockingKeys: 0, bossSatisfied: true, advancedTo: 'P2' })
+describe('结束流程（P-5 spec §4.1：不再升阶段）', () => {
+  it('掌握度全部达标：masteryReady 为真，且不发任何升阶段副作用', () => {
+    const r = reduce(emptyPlanSession(), { type: 'start' }, ctx(allP1Strong()))
+    expect(r.state.summary?.gate).toEqual({ evaluated: true, masteryReady: true, blockingKeys: 0 })
+    expect(r.effects.map((e) => e.type)).not.toContain('advancePhase')
   })
 
-  it('实战关替身未通过：不升阶段', () => {
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 3 } }), { type: 'start' }, ctx(allP1Strong()))
-    expect(find(r.effects, 'advancePhase')).toEqual([])
-    expect(r.state.summary?.gate).toMatchObject({ evaluated: true, passed: false, bossSatisfied: false })
-  })
-
-  it('掌握度不足：列出阻塞的 key 数', () => {
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 } }), { type: 'start' }, ctx(new Map()))
+  it('掌握度不足：列出阻塞数', () => {
+    const r = reduce(emptyPlanSession(), { type: 'start' }, ctx(new Map()))
+    expect(r.state.summary?.gate).toMatchObject({ evaluated: true, masteryReady: false })
     expect(r.state.summary?.gate.blockingKeys).toBe(knowledgePointsOfPhase(c, 'P1').length * 3)
   })
 
-  it('跨天护栏：停滞的 key 发 saveMastery（拆解后的状态），并且关卡评估用的是拆解后的状态', () => {
+  it('跨天护栏照旧，且关卡评估用拆解后的掌握度', () => {
     const m = allP1Strong()
     const k = masteryKey('degree:major:do', 'recognize')
     m.set(k, {
@@ -62,36 +49,23 @@ describe('结束流程', () => {
       window: Array.from({ length: 8 }, (_, i) => ({ correct: false, day: 28 + (i % 3), difficultyStep: 3 })),
       lastSeenDay: 30,
     })
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 } }), { type: 'start' }, ctx(m))
+    const r = reduce(emptyPlanSession(), { type: 'start' }, ctx(m))
     const saves = find(r.effects, 'saveMastery')
     expect(saves.map((s) => s.key)).toContain(k)
     expect(saves.find((s) => s.key === k)!.state.contextLevel).toBe(0)
-    // 关卡评估必须用拆解后的状态：拆解前该 key 达标会过关，拆解后窗口清空而阻塞
-    expect(find(r.effects, 'advancePhase')).toEqual([])
-    expect(r.state.summary?.gate.passed).toBe(false)
+    expect(r.state.summary?.gate.masteryReady).toBe(false)
     expect(r.state.summary?.gate.blockingKeys).toBeGreaterThanOrEqual(1)
-    expect(r.state.summary?.gate.bossSatisfied).toBe(true)
   })
 
-  it('endEarly：做护栏与总结，不评估关卡、不升阶段；会话记为完成', () => {
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 }, index: 0, plan: { day: 30, seed: 1, phaseId: 'P1', items: [] } }), { type: 'endEarly' }, ctx(allP1Strong()))
-    expect(find(r.effects, 'advancePhase')).toEqual([])
+  it('endEarly：不评估关卡；会话记为完成', () => {
+    const r = reduce(emptyPlanSession(), { type: 'endEarly' }, ctx(allP1Strong()))
     expect(r.state.summary?.gate.evaluated).toBe(false)
     expect(find(r.effects, 'saveSession')[0].record.completed).toBe(true)
   })
 
-  it('最后一阶段过关：不发 advancePhase', () => {
-    const s = emptyPlanSession({ phaseId: 'P5', boss: { attempted: 5, correct: 5 }, plan: { day: 30, seed: 1, phaseId: 'P5', items: [] } })
-    const m = new Map<string, MasteryState>()
-    for (const kp of knowledgePointsOfPhase(c, 'P5')) for (const mod of MODALITIES) m.set(masteryKey(kp, mod), { ...strong(), stability: 40 })
-    const r = reduce(s, { type: 'start' }, ctx(m))
-    expect(find(r.effects, 'advancePhase')).toEqual([])
-  })
-
-  it('副作用顺序：saveMastery（护栏）→ advancePhase → saveSession → ended', () => {
-    const r = reduce(emptyPlanSession({ boss: { attempted: 5, correct: 5 } }), { type: 'start' }, ctx(allP1Strong()))
-    const order = r.effects.map((e) => e.type).filter((t) => t !== 'saveMastery')
-    expect(order).toEqual(['advancePhase', 'saveSession', 'ended'])
+  it('副作用顺序：saveMastery（护栏）→ saveSession → ended', () => {
+    const r = reduce(emptyPlanSession(), { type: 'start' }, ctx(allP1Strong()))
+    expect(r.effects.map((e) => e.type).filter((t) => t !== 'saveMastery')).toEqual(['saveSession', 'ended'])
   })
 
   it('重练模式：只发 ended', () => {

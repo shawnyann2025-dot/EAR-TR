@@ -1,12 +1,11 @@
 import { masteryKey, type MasteryKey, type Track } from '../curriculum/knowledgePoints'
 import type { PhaseId } from '../curriculum/stages'
 import { generate, grade, type Exercise } from '../exercises/generate'
-import { evaluateGate, nextPhase } from '../scheduling/gate'
+import { evaluateGate } from '../scheduling/gate'
 import type { MasteryState } from '../scheduling/mastery'
 import type { SessionPlan } from '../scheduling/scheduler'
 import { prepareItem, recordAnswer, stagnationUpdates } from './item'
 import {
-  BOSS_STANDIN_ACCURACY,
   CurrentItem,
   ReduceContext,
   ReduceResult,
@@ -16,7 +15,6 @@ import {
   SessionRecord,
   SessionState,
   SessionSummary,
-  Tally,
 } from './types'
 
 const zeroByTrack = (): Record<Track, number> => ({ T: 0, H: 0, R: 0 })
@@ -105,14 +103,9 @@ function present(state: SessionState, ctx: ReduceContext, effects: SessionEffect
   return finish(s, ctx, effects, true)
 }
 
-/** 实战关替身（P-3 spec D3）：本场实战关段至少答过 1 题，且正确率达标 */
-export function bossPassed(boss: Tally): boolean {
-  return boss.attempted > 0 && boss.correct / boss.attempted >= BOSS_STANDIN_ACCURACY
-}
-
 /**
  * 结束流程（P-3 spec §3.7）。
- * full = 计划用完；endEarly 时为 false——不完整的会话不评估关卡、不升阶段。
+ * full = 计划用完；endEarly 时为 false——不完整的会话不评估关卡。
  */
 function finish(state: SessionState, ctx: ReduceContext, effects: SessionEffect[], full: boolean): ReduceResult {
   const out = [...effects]
@@ -126,19 +119,10 @@ function finish(state: SessionState, ctx: ReduceContext, effects: SessionEffect[
       out.push({ type: 'saveMastery', key: u.key, state: u.state })
     }
 
-    // ② 关卡：三模态齐平 + 实战关替身
+    // ② 掌握度是否达标（实战关在首页单独挑战，这里不升阶段——P-5 spec §4.1）
     if (full) {
-      const boss = bossPassed(state.boss)
-      const gate = evaluateGate(ctx.curriculum, merged, state.phaseId, boss)
-      const to = gate.passed ? nextPhase(state.phaseId) : null
-      if (to) out.push({ type: 'advancePhase', from: state.phaseId, to, day: state.day })
-      summary.gate = {
-        evaluated: true,
-        passed: gate.passed,
-        blockingKeys: gate.blockingKeys.length,
-        bossSatisfied: gate.bossSatisfied,
-        advancedTo: to,
-      }
+      const gate = evaluateGate(ctx.curriculum, merged, state.phaseId, true)
+      summary.gate = { evaluated: true, masteryReady: gate.blockingKeys.length === 0, blockingKeys: gate.blockingKeys.length }
     }
   }
 
@@ -156,7 +140,7 @@ function baseSummary(state: SessionState): SessionSummary {
     accuracy: attempted > 0 ? correct / attempted : 0,
     byTrack: { ...state.byTrack },
     reliefTriggered: state.reliefTriggered,
-    gate: { evaluated: false, passed: false, blockingKeys: 0, bossSatisfied: false, advancedTo: null },
+    gate: { evaluated: false, masteryReady: false, blockingKeys: 0 },
   }
 }
 
