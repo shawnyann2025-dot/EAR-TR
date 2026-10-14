@@ -12,7 +12,6 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'],
       manifest: {
         name: '练耳',
         short_name: '练耳',
@@ -32,6 +31,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
         navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/\/fixtures\//],
         cleanupOutdatedCaches: true,
       },
     }),

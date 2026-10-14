@@ -4,10 +4,10 @@
 
 ## 0. 准备
 
-1. 手机浏览器打开 **https://shawnyann2025-dot.github.io/EAR-TR/** （开发者交付时会说明当前部署的是哪个版本；设置页底部能看到版本号，请把它记在「结果」里）。请至少测一种：iPhone 的 Safari，或安卓的 Chrome（两种都测更好）。把手机型号和系统版本记在「结果」里。
+1. 手机浏览器打开 [**https://shawnyann2025-dot.github.io/EAR-TR/**](https://shawnyann2025-dot.github.io/EAR-TR/) （开发者交付时会说明当前部署的是哪个版本；设置页底部能看到版本号，请把它记在「结果」里）。请至少测一种：iPhone 的 Safari，或安卓的 Chrome（两种都测更好）。把手机型号和系统版本记在「结果」里。
 2. **iPhone 请先把侧边的静音键拨到「关闭静音」（看不到橙色）**。静音键打开时网页声音会被整个静音，会误以为没声音。
 3. 尽量用有线耳机。蓝牙耳机有延迟，会影响打拍题的判定；如果只能用蓝牙，请在「结果」里注明。
-4. 第 1 节的音色调试页地址是 `https://shawnyann2025-dot.github.io/EAR-TR/#dev`。
+4. 第 1 节的音色调试页地址是 [https://shawnyann2025-dot.github.io/EAR-TR/#dev](https://shawnyann2025-dot.github.io/EAR-TR/#dev)。
 
 > 开发者本地调试仍可用 `npm run dev` + 局域网地址，但局域网 http 下手机不给麦克风、不启用离线缓存，不能用于验收。
 
@@ -94,7 +94,13 @@
 > 实战关在本阶段掌握度全部达标后才出现在首页。想提前试，按下面做：
 >
 > 1. 先在「设置」点「导出备份」，备份自己的数据。
-> 2. 在手机浏览器打开 `https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P1.json`（其他阶段把 P1 换成 P2–P5）。如果只是显示一堆文字、没有下载：在本清单里的这个链接上长按 →「下载链接文件」（iPhone，文件存到「文件」App 的「下载」）/「下载链接」（安卓）。
+> 2. 在手机浏览器里点下面对应阶段的链接（不用改网址）：
+>    - [boss-ready-P1.json](https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P1.json)
+>    - [boss-ready-P2.json](https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P2.json)
+>    - [boss-ready-P3.json](https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P3.json)
+>    - [boss-ready-P4.json](https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P4.json)
+>    - [boss-ready-P5.json](https://shawnyann2025-dot.github.io/EAR-TR/fixtures/boss-ready-P5.json)
+>    如果只是显示一堆文字、没有下载：在上面对应的链接上长按 →「下载链接文件」（iPhone，文件存到「文件」App 的「下载」）/「下载链接」（安卓）。
 > 3. 到「设置 → 导入备份」，从下载位置选中刚下载的文件。
 > 4. 验收完，再导入第 1 步导出的备份恢复自己的数据。
 

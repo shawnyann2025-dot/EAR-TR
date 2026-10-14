@@ -19,6 +19,14 @@ describe.skipIf(!has)('PWA 构建产物（P-6 spec §3）', () => {
     }
     expect(sw).toContain('pwa-192x192.png')
   })
+  it('sw.js 的导航回退排除 /fixtures/，图标已预缓存且不再重复 includeAssets', () => {
+    const sw = readFileSync('dist/sw.js', 'utf8')
+    expect(sw).toContain(String.raw`denylist:[/\/fixtures\//]`)
+    for (const f of ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg']) {
+      expect(sw.split(`url:"${f}"`).length - 1, f).toBe(1)
+    }
+    expect(sw).toContain('pwa-192x192.png')
+  })
   it('index.html：manifest、apple-touch-icon、iOS meta', () => {
     const html = readFileSync('dist/index.html', 'utf8')
     expect(html).toContain('manifest.webmanifest')
