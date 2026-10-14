@@ -158,6 +158,8 @@ interface BossChallenge {
 
 中途离开（切走、关页面）不算一次尝试、不占当天次数；进度不保存，回来重新开始新片段。
 
+**状态（P-5b）**：已实现。`Runtime.bossStatus` / `newBossChallenge`（seed = `sessionSeed(profileId, day, 1000 + 当天已尝试次数)`）/ `recordBossAttempt`；关卡页 `src/ui/pages/Boss.tsx`，结果对照 `src/ui/BossResult.tsx`；存储 `bossAttempts`，IndexedDB v2。开场「播放整曲」免费一次，之后最多再听 3 次，单句重听不限；`BossGrade` 增加 `partsPassed`，结果页逐部分显示百分比与「（达标）/（未达标）」，拍号与新调主音显示所选与正确答案。
+
 ## 5. 测试
 
 **P-5a**

@@ -465,6 +465,8 @@ Session 开始时一次性生成并落盘。中断可续，凭 seed 可复现。
 
 **状态（P-5a）**：实战关为真实的多轨合成片段（`src/boss/`），每个作答部分 ≥ 90% 才算通过（和弦、节奏这类不超过 10 个位置的部分允许错 1 个，用户裁定 2026-10-14）；每天最多 3 次，每次换新片段。P-5b 接入界面之前，应用里的关卡仍由 P-3 的替身判定。
 
+**状态（P-5b）**：实战关在首页单独挑战（掌握度达标后解锁），通过即升阶段并写 `GateRecord`；日常会话不再评估关卡、不再升阶段。P-3 的实战关替身已删除。
+
 
 ### 8.4 实战关音源
 
@@ -528,6 +530,7 @@ MasteryState  （按 MasteryKey 存，结构见 §7.1）
 Attempt       { at, day, sessionNo, kpId, modality, spec, correct, latencyMs, detail }
 SessionRecord { day, sessionNo, phaseId, plan, index, progress, boss, byTrack, reliefTriggered, completed }
 GateRecord    { phaseId, passedOnDay }
+BossAttempt   { phaseId, day, seed, parts, passed, at }   // P-5b；SCHEMA_VERSION = 2
 AttemptAggregate { key, attempts, correct }   // 超出 5 万条的旧作答聚合
 ```
 
